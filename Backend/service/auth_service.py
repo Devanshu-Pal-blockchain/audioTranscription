@@ -24,6 +24,10 @@ def authenticate_user(username: str, password: str):
         return False
     return user
 
+def get_user_email(username: str):
+    user = db.users.find_one({"username": username})
+    return user.get("email") if user else None
+
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))

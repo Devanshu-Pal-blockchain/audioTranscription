@@ -7,7 +7,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def get_user_by_username(username: str):
     return db.users.find_one({"username": username})
 
-def create_user(username: str, password: str, role: str):
+def create_user(username: str, password: str, role: str, email: str = None):
     hashed_password = pwd_context.hash(password)
     user = {
         "uuid": str(uuid.uuid4()),
@@ -15,5 +15,7 @@ def create_user(username: str, password: str, role: str):
         "hashed_password": hashed_password,
         "role": role
     }
+    if email:
+        user["email"] = email
     db.users.insert_one(user)
     return user

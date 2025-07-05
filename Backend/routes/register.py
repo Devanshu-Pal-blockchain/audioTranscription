@@ -9,6 +9,7 @@ class UserCreate(BaseModel):
     username: str
     password: str
     role: str  # 'admin' or 'employee'
+    email: str = None
 
 @router.post("/register")
 def register_user(user: UserCreate):
@@ -17,5 +18,5 @@ def register_user(user: UserCreate):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already exists"
         )
-    create_user(user.username, user.password, user.role)
+    create_user(user.username, user.password, user.role, user.email)
     return {"message": f"User {user.username} created successfully as {user.role}"}

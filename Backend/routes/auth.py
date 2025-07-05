@@ -13,6 +13,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    # Include role in JWT token
-    access_token = create_access_token(data={"sub": user["username"], "role": user["role"]})
-    return {"access_token": access_token, "token_type": "bearer", "role": user["role"]}
+    # Include role and email in JWT token and response
+    email = user.get("email")
+    access_token = create_access_token(data={"sub": user["username"], "role": user["role"], "email": email})
+    return {"access_token": access_token, "token_type": "bearer", "role": user["role"], "email": email}

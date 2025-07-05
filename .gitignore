@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.cache/
+*.log
+*.sqlite3
+*.db
+*.pkl
+*.h5
+*.env
+.env.*
+
+# VSCode
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+
+# Qdrant/Chroma/Vector DB
+/data/qdrant_db/
+/data/chroma_db/
+
+# Audio/Transcripts
+*.wav
+*.mp3
+*.ogg
+*.flac
+*.m4a
+*.opus
+*.aac
+*.amr
+*.zip
+*.tar.gz
+*.tar
+
+# MongoDB dump
+*.bson
+*.json
+
+# Test/coverage
+.coverage
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+
+# Misc
+*.bak
+*.swp
+*.tmp
+*.old
+*.orig
+*.rej

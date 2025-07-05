@@ -1,6 +1,15 @@
+
+pandas
+sentence-transformers
+qdrant-client
 fastapi
 uvicorn
 python-jose
 passlib[bcrypt]
 pymongo
 python-dotenv
+
+langchain-community
+langchain-google-genai
+langchain
+numpy
