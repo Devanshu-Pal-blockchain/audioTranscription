@@ -19,6 +19,7 @@ class User(BaseModel):
     employee_role: Literal["admin", "employee"] = "employee"
     employee_responsibilities: Optional[str] = None
     employee_code: Optional[str] = None
+    employee_designation: Optional[str] = None
     assigned_rocks: Optional[List[UUID]] = Field(default_factory=list, description="Optional list of assigned rock UUIDs")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

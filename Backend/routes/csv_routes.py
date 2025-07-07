@@ -19,7 +19,7 @@ async def upload_csv(
     """
     Upload CSV file and create users in the users collection. Validates required fields.
     """
-    REQUIRED_FIELDS = {"employee_name", "employee_email", "employee_role", "employee_responsibilities", "employee_code"}
+    REQUIRED_FIELDS = {"employee_name", "employee_email", "employee_role", "employee_responsibilities", "employee_code", "employee_designation"}
     try:
         # Read CSV file
         contents = await file.read()
@@ -61,7 +61,7 @@ async def upload_csv(
             # Create User model
             user = User(**row)
             created = await UserService.create_user(user)
-            created_users.append({"email": created.employee_email, "password": row["employee_password"]})
+            created_users.append({"email": created.employee_email, "password": row["employee_password"], "designation": row.get("designation")})
 
         return {
             "message": "CSV uploaded successfully",
