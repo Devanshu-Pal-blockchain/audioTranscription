@@ -32,6 +32,7 @@ class TokenData(BaseModel):
     employee_id: str
     role: str
     email: Optional[str] = None
+    assigned_rocks: Optional[list] = None
 
 async def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash"""
@@ -65,12 +66,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         employee_id = payload.get("sub")
         role = payload.get("role")
+        assigned_rocks = payload.get("assigned_rocks", [])
         if not employee_id or not role:
             raise credentials_exception
         token_data = TokenData(
             employee_id=employee_id,
             role=role,
-            email=payload.get("email")
+            email=payload.get("email"),
+            assigned_rocks=assigned_rocks
         )
     except JWTError:
         raise credentials_exception
