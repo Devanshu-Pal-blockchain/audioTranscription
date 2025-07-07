@@ -6,11 +6,11 @@ from typing import Optional, Dict, List
 from .db import db
 from uuid import uuid4
 from datetime import datetime
-from .employee_service import EmployeeService
+
 
 RAW_CONTEXT_COLLECTION = 'raw_contexts'
 STRUCTURED_CONTEXT_COLLECTION = 'structured_contexts'
-CSV_CONTEXT_COLLECTION = 'csv_contexts'
+
 
 # Helper: ensure each context file has a unique id ("context_id") and an index ("context_index")
 from uuid import uuid4
@@ -28,8 +28,7 @@ def ensure_context_id_and_index(doc, context_type, admin_id):
     if changed:
         db[{
             'raw': RAW_CONTEXT_COLLECTION,
-            'structured': STRUCTURED_CONTEXT_COLLECTION,
-            'csv': CSV_CONTEXT_COLLECTION
+            'structured': STRUCTURED_CONTEXT_COLLECTION
         }[context_type]].replace_one({'admin_id': admin_id}, {'admin_id': admin_id, 'context': doc['context'], 'context_id': doc['context_id'], 'context_index': doc['context_index']}, upsert=True)
     return doc
 
@@ -55,54 +54,9 @@ def save_structured_context_json(file, admin_id):
     db[STRUCTURED_CONTEXT_COLLECTION].replace_one({'admin_id': admin_id}, {'admin_id': admin_id, 'context': json_data}, upsert=True)
     return json_data
 
-async def save_csv_context(csv_data: List[Dict], admin_id: str) -> str:
-    """
-    Save CSV context with employee UUIDs
-    Returns: context_id
-    """
-    # Create a new context ID
-    context_id = str(uuid4())
-    
-    # Process each row to add UUIDs
-    processed_rows = []
-    for row in csv_data:
-        # Get or create UUID for employee
-        emp_id = row.get('empId')
-        if emp_id:
-            # Await the UUID creation/retrieval
-            uuid = await EmployeeService.create_or_get_uuid(emp_id)
-            # Add UUID to row data
-            row['employee_uuid'] = uuid
-            
-            # Store additional employee data
-            employee_data = {
-                'name': row.get('name'),
-                'email': row.get('email'),
-                'role': row.get('role'),
-                'responsibilities': row.get('responsibilities')
-            }
-            # Await the employee data update
-            await EmployeeService.update_employee_data(emp_id, employee_data)
-        
-        processed_rows.append(row)
 
-    # Store the processed CSV data
-    document = {
-        'context_id': context_id,
-        'admin_id': admin_id,
-        'csv_data': processed_rows,
-        'created_at': datetime.utcnow(),
-        'updated_at': datetime.utcnow()
-    }
-    
-    # Await the database operation
-    await db[CSV_CONTEXT_COLLECTION].insert_one(document)
-    return context_id
 
-async def fetch_csv_context(context_id: str) -> Optional[Dict]:
-    """Get CSV context by ID"""
-    result = await db[CSV_CONTEXT_COLLECTION].find_one({'context_id': context_id})
-    return result
+
 
 # Retrieve raw context JSON for admin
 
@@ -124,12 +78,7 @@ def get_structured_context_json(admin_id, with_meta=False):
 
 # Retrieve CSV context for admin
 
-def get_csv_context(admin_id, with_meta=False):
-    doc = db[CSV_CONTEXT_COLLECTION].find_one({'admin_id': admin_id})
-    doc = ensure_context_id_and_index(doc, 'csv', admin_id)
-    if with_meta:
-        return doc
-    return doc['context'] if doc else None
+
 
 # ------------------- FINE-GRAINED CRUD (IN-FILE) -------------------
 
@@ -275,57 +224,25 @@ def delete_structured_item(admin_id, key, item_id):
 # -------- CSV: CRUD for individual rows (list of dicts) --------
 
 def list_csv_rows(admin_id):
-    """List all rows in the admin's CSV context. Each row has a unique 'id'."""
-    context = get_csv_context(admin_id)
-    rows = context if context else []
-    changed = False
-    for row in rows:
-        if 'id' not in row:
-            row['id'] = str(uuid4())
-            changed = True
-    if changed:
-        db[CSV_CONTEXT_COLLECTION].replace_one({'admin_id': admin_id}, {'admin_id': admin_id, 'context': rows}, upsert=True)
-    return rows
+    """(Deprecated) List all rows in the admin's CSV context. No longer used."""
+    return []
 
 
 def get_csv_row(admin_id, row_id):
-    """Get a single row by unique ID from CSV context."""
-    rows = list_csv_rows(admin_id)
-    for row in rows:
-        if row.get('id') == row_id:
-            return row
+    """(Deprecated) Get a single row by unique ID from CSV context. No longer used."""
     return None
 
 
 def create_csv_row(admin_id, row):
-    """Append a new row with a unique ID to CSV context."""
-    rows = get_csv_context(admin_id) or []
-    row = dict(row)
-    row['id'] = str(uuid4())
-    rows.append(row)
-    db[CSV_CONTEXT_COLLECTION].replace_one({'admin_id': admin_id}, {'admin_id': admin_id, 'context': rows}, upsert=True)
-    return row
+    """(Deprecated) Append a new row with a unique ID to CSV context. No longer used."""
+    return None
 
 
 def update_csv_row(admin_id, row_id, row):
-    """Update a row by unique ID in CSV context."""
-    rows = get_csv_context(admin_id) or []
-    for idx, r in enumerate(rows):
-        if r.get('id') == row_id:
-            row = dict(row)
-            row['id'] = row_id
-            rows[idx] = row
-            db[CSV_CONTEXT_COLLECTION].replace_one({'admin_id': admin_id}, {'admin_id': admin_id, 'context': rows}, upsert=True)
-            return row
+    """(Deprecated) Update a row by unique ID in CSV context. No longer used."""
     return None
 
 
 def delete_csv_row(admin_id, row_id):
-    """Delete a row by unique ID in CSV context."""
-    rows = get_csv_context(admin_id) or []
-    for idx, r in enumerate(rows):
-        if r.get('id') == row_id:
-            removed = rows.pop(idx)
-            db[CSV_CONTEXT_COLLECTION].replace_one({'admin_id': admin_id}, {'admin_id': admin_id, 'context': rows}, upsert=True)
-            return removed
+    """(Deprecated) Delete a row by unique ID in CSV context. No longer used."""
     return False
