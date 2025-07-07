@@ -6,7 +6,7 @@ from models.task import Task
 from models.user import User
 from .rock_service import RockService
 from .task_service import TaskService
-from .user_service import UserService
+from .participants_service import UserService
 from datetime import datetime
 
 class CombinedService:

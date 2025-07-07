@@ -408,7 +408,19 @@ class PipelineService:
         logger.warning("No clear JSON boundaries found, returning first chunk")
         return response_text[:max_tokens_per_chunk]
 
-    async def combine_segments_and_generate_rocks(self, segment_analyses: List[Dict[str, Any]], num_weeks: int = 12, max_retries: int = 3) -> Dict[str, Any]:
+    def participants_to_csv(self, participants: list) -> str:
+        """Convert a list of participant dicts to a CSV string with Full Name, Job Role, Responsibilities columns."""
+        if not participants:
+            return "Full Name,Job Role,Responsibilities"
+        lines = ["Full Name,Job Role,Responsibilities"]
+        for p in participants:
+            name = p.get("employee_name", "")
+            role = p.get("employee_designation", "")
+            resp = p.get("employee_responsibilities", "")
+            lines.append(f'{name},{role},{resp}')
+        return "\n".join(lines)
+
+    async def combine_segments_and_generate_rocks(self, segment_analyses: List[Dict[str, Any]], num_weeks: int, participants: list, max_retries: int = 3) -> Dict[str, Any]:
         """Step 4: Combine segment analyses and generate ROCKS in one step"""
         logger.info(f"Combining {len(segment_analyses)} segment analyses and generating ROCKS")
         
@@ -436,9 +448,9 @@ EXTRACTED INFORMATION:
             all_dates.update(analysis.get('dates', []))
             all_organizations.update(analysis.get('organizations', []))
         
-        # Load roles from CSV
-        roles_list = self.load_roles_from_csv('test.csv')
-        roles_str = "\n".join(roles_list)
+        # Generate roles CSV string from participants
+        roles_csv = self.participants_to_csv(participants)
+        roles_str = roles_csv
         
         # Generate weekly_tasks structure dynamically
         weekly_tasks_structure = self.generate_weekly_tasks_structure(num_weeks)
@@ -455,11 +467,13 @@ EXTRACTED INFORMATION:
         - Action items identified: {len(total_action_items)}
         - Number of weeks: {num_weeks}
         
-        AVAILABLE ROLES AND EMPLOYEES:
+        AVAILABLE ROLES AND EMPLOYEES (CSV):
         {roles_str}
         
-        SEGMENT ANALYSES:
-        {analyses_text}
+        INSTRUCTIONS:
+        - ONLY use the names and designations (job roles) provided in the above CSV for assigning owners to rocks and tasks.
+        - DO NOT invent or use any names or positions that are not present in the CSV.
+        - If a specific person is not mentioned, choose the most relevant employee from the provided list.
         
         REQUIREMENTS:
         Create a JSON structure with the following format:
@@ -567,18 +581,6 @@ EXTRACTED INFORMATION:
                     return {"error": str(e), "attempts_made": max_retries + 1}
 
     # ==================== SCRIPT 4: ROCKS GENERATION ====================
-    def load_roles_from_csv(self, csv_path: str) -> List[str]:
-        """Load employee roles from CSV file"""
-        roles = []
-        try:
-            with open(csv_path, newline='', encoding='utf-8') as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    roles.append(f"{row['Full Name']} ({row['Job Role']})")
-        except Exception as e:
-            logger.warning(f"Could not load roles from {csv_path}: {e}")
-        return roles
-    
     def generate_weekly_tasks_structure(self, num_weeks: int) -> str:
         """Generate the weekly_tasks structure dynamically (without task_id)"""
         structure_parts = []
@@ -592,15 +594,11 @@ EXTRACTED INFORMATION:
             structure_parts.append(week_structure)
         return f"[\n{',\n'.join(structure_parts)}\n                    ]"
 
-    async def generate_rocks(self, analysis_result: Dict[str, Any], num_weeks: int = 12, max_retries: int = 3) -> Dict[str, Any]:
+    async def generate_rocks(self, analysis_result: Dict[str, Any], num_weeks: int, max_retries: int = 3) -> Dict[str, Any]:
         """Script 4: ROCKS generation using Gemini with retry mechanism"""
         
         analysis_text = analysis_result.get('analysis', '')
         input_summary = analysis_result.get('input_summary', {})
-        
-        # Load roles from CSV
-        roles_list = self.load_roles_from_csv('test.csv')
-        roles_str = "\n".join(roles_list)
         
         # Generate weekly_tasks structure dynamically
         weekly_tasks_structure = self.generate_weekly_tasks_structure(num_weeks)
@@ -616,11 +614,6 @@ EXTRACTED INFORMATION:
         - Action items identified: {input_summary.get('action_items_count', 0)}
         - People involved: {input_summary.get('people_mentioned', 0)}
         - Number of weeks: {num_weeks}
-        
-        AVAILABLE ROLES AND EMPLOYEES:
-        {roles_str}
-        
-        When assigning owners to rocks and tasks, use the most relevant employee and role from the above list. If no suitable match is found, use a generic role as before (e.g., "Project Manager").
         
         REQUIREMENTS:
         Create a JSON structure with the following format:
@@ -726,7 +719,7 @@ EXTRACTED INFORMATION:
                 else:
                     return {"error": str(e), "attempts_made": max_retries + 1}
     
-    def validate_rocks_structure(self, rocks_data: Dict[str, Any], num_weeks: int = 12) -> Dict[str, Any]:
+    def validate_rocks_structure(self, rocks_data: Dict[str, Any], num_weeks: int) -> Dict[str, Any]:
         """Validate the generated ROCKS structure"""
         validation_result = {
             "valid": True,
@@ -787,7 +780,7 @@ EXTRACTED INFORMATION:
         return validation_result
 
     # ==================== MAIN PIPELINE FUNCTION ====================
-    async def run_pipeline(self, audio_file: str, num_weeks: int = 12) -> Dict[str, Any]:
+    async def run_pipeline(self, audio_file: str, num_weeks: int, quarter_id: str, participants: list) -> Dict[str, Any]:
         """Run the complete pipeline"""
         try:
             # Create timestamp for file naming
@@ -796,7 +789,6 @@ EXTRACTED INFORMATION:
             
             # Step 1: Audio Processing
             transcription_data = self.process_audio(audio_file)
-            # self._save_to_database(transcription_data, "raw")  # Commented out for now
             log_step_completion("Step 1: Audio Processing")
             
             # Step 2: Semantic Tokenization
@@ -808,7 +800,7 @@ EXTRACTED INFORMATION:
             log_step_completion("Step 3: Parallel Segment Analysis")
             
             # Step 4: Combine Segments and Generate ROCKS
-            rocks_data = await self.combine_segments_and_generate_rocks(segment_analyses, num_weeks)
+            rocks_data = await self.combine_segments_and_generate_rocks(segment_analyses, num_weeks, participants)
             
             # Check if ROCKS generation failed
             if "error" in rocks_data:
@@ -822,7 +814,6 @@ EXTRACTED INFORMATION:
                 for issue in validation["issues"]:
                     logger.warning(f"  - {issue}")
             
-            # self._save_to_database(rocks_data, "structured")  # Commented out for now
             log_step_completion("Step 4: ROCKS Generation")
             
             # Create final response (only ROCKS data)
@@ -833,9 +824,9 @@ EXTRACTED INFORMATION:
             with open(final_file, "w", encoding="utf-8") as f:
                 json.dump(final_response, f, indent=2, ensure_ascii=False)
             
-            # Parse final response into Rock and Task collections
+            # Parse final response into Rock and Task collections, always passing quarter_id and participants
             log_step_completion("Step 5: Data Parsing")
-            rocks_file, tasks_file = parse_pipeline_response_to_files(final_response, file_prefix)
+            rocks_file, tasks_file = parse_pipeline_response_to_files(final_response, file_prefix, quarter_id, participants)
             
             if rocks_file and tasks_file:
                 logger.info(f"Parsed data saved to: {rocks_file} and {tasks_file}")
@@ -851,7 +842,7 @@ EXTRACTED INFORMATION:
             return {"error": str(e), "status": "failed"}
 
 # Convenience function for easy usage
-async def run_pipeline_for_audio(audio_file: str, num_weeks: int = 12, admin_id: str = "default_admin") -> Dict[str, Any]:
+async def run_pipeline_for_audio(audio_file: str, num_weeks: int, quarter_id: str, participants: list, admin_id: str = "default_admin") -> Dict[str, Any]:
     """Convenience function to run pipeline for a given audio file"""
     pipeline = PipelineService(admin_id)
-    return await pipeline.run_pipeline(audio_file, num_weeks) 
+    return await pipeline.run_pipeline(audio_file, num_weeks, quarter_id, participants) 

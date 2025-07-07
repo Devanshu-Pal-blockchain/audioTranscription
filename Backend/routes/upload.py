@@ -11,13 +11,34 @@ from dotenv import load_dotenv
 from models.user import User
 from service.auth_service import admin_required
 from service.script_pipeline_service import run_pipeline_for_audio
-from service.data_parser_service import parse_pipeline_response_to_files
+from jose import jwt, JWTError
+from service.user_service import UserService
+import logging
 
 load_dotenv()
 
 router = APIRouter()
 
 from fastapi import Form
+
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+# Dependency to check admin role
+async def admin_required(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        role = payload.get("role")
+        if role != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only.")
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.")
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @router.post("/upload-audio")
 async def upload_audio(
@@ -81,33 +102,56 @@ async def upload_audio(
     with open(file_location, "wb") as f:
         f.write(await file.read())
     
+    # Require quarterWeeks from the frontend and convert to int
+    if quarterWeeks is None:
+        raise HTTPException(status_code=400, detail="quarterWeeks is required from the frontend.")
+    try:
+        num_weeks = int(quarterWeeks)
+    except Exception:
+        raise HTTPException(status_code=400, detail="quarterWeeks must be an integer.")
+    
+    # Require id from the frontend to use as quarter_id
+    if id is None:
+        raise HTTPException(status_code=400, detail="id (quarter_id) is required from the frontend.")
+    quarter_id = id
+    
+    # Fetch participant details from the database using participant IDs
+    participant_ids = []
+    participant_info = []
+    if participants:
+        participant_ids = [pid.strip() for pid in participants.split(",") if pid.strip()]
+        participant_details = await UserService.get_users_by_ids(participant_ids)
+        found_ids = {str(user.employee_id) for user in participant_details}
+        missing_ids = [pid for pid in participant_ids if pid not in found_ids]
+        if missing_ids:
+            logger.warning(f"Some participant IDs from the frontend were not found in the database: {missing_ids}")
+        participant_info = [
+            {
+                "employee_id": str(user.employee_id),
+                "employee_name": user.employee_name,
+                "employee_responsibilities": user.employee_responsibilities,
+                "employee_designation": user.employee_designation
+            }
+            for user in participant_details
+        ]
+        logger.info(f"Fetched participant info: {participant_info}")
+    
     # Start pipeline in background (non-blocking)
-    async def process_audio_background():
+    async def process_audio_background(current_user):
         try:
-            # Check if test.csv exists
-            if not os.path.exists("test.csv"):
-                print("Warning: test.csv file not found (required for ROCKS generation)")
-                return
-            
-            # Run pipeline with default 12 weeks
+            # Run pipeline with the number of weeks and quarter_id from the frontend, and pass participant_info
             result = await run_pipeline_for_audio(
                 file_location, 
-                num_weeks=12, 
-                admin_id=str(current_user.employee_id)
+                num_weeks=num_weeks, 
+                quarter_id=quarter_id,
+                participants=participant_info,
+                admin_id=str(current_user['sub'])
             )
             
             if "error" in result:
                 print(f"Pipeline failed: {result['error']}")
             else:
                 print("Pipeline completed successfully!")
-                
-                # Save to files if quarter_id provided
-                if quarter_id:
-                    rocks_file, tasks_file = parse_pipeline_response_to_files(result)
-                    if rocks_file and tasks_file:
-                        print(f"Data saved to files: {rocks_file}, {tasks_file}")
-                    else:
-                        print("Failed to save data to files")
                 
         except Exception as e:
             print(f"Background pipeline error: {e}")
@@ -117,12 +161,9 @@ async def upload_audio(
                 os.remove(file_location)
             except:
                 pass
-    
-    asyncio.create_task(process_audio_background())
+    asyncio.create_task(process_audio_background(current_user))
     
     return {
-        "message": f"Audio file '{file.filename}' uploaded successfully. Pipeline started in background.",
-        "file_location": file_location,
-        "pipeline_status": "started",
-        "quarter_id": quarter_id
+        "message": f"Audio file '{file.filename}' uploaded successfully.",
+        "participants": participant_info
     } 

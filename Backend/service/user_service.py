@@ -213,4 +213,16 @@ class UserService:
             "employee_email": user.employee_email,
             "employee_role": user.employee_role,
             "assigned_rocks": [str(rock_id) for rock_id in user.assigned_rocks]
-        } 
+        }
+
+    @staticmethod
+    async def get_users_by_ids(user_ids: list) -> list:
+        """Get multiple users by a list of employee IDs"""
+        users = []
+        str_ids = [str(uid) for uid in user_ids]
+        async for user_dict in UserService.collection.find({"employee_id": {"$in": str_ids}}):
+            # Convert string IDs to UUIDs
+            user_dict["employee_id"] = UUID(user_dict["employee_id"])
+            user_dict["assigned_rocks"] = [UUID(rock_id) for rock_id in user_dict.get("assigned_rocks", [])]
+            users.append(User.model_validate(user_dict))
+        return users 
