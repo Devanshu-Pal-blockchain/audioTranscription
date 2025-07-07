@@ -826,7 +826,7 @@ EXTRACTED INFORMATION:
             
             # Parse final response into Rock and Task collections, always passing quarter_id and participants
             log_step_completion("Step 5: Data Parsing")
-            rocks_file, tasks_file = parse_pipeline_response_to_files(final_response, file_prefix, quarter_id, participants)
+            rocks_file, tasks_file = await parse_pipeline_response_to_files(final_response, file_prefix, quarter_id, participants)
             
             if rocks_file and tasks_file:
                 logger.info(f"Parsed data saved to: {rocks_file} and {tasks_file}")

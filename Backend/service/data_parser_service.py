@@ -8,6 +8,8 @@ from typing import Dict, Any, List, Tuple
 from datetime import datetime
 import logging
 import difflib
+from .db import db
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -97,9 +99,15 @@ class DataParserService:
             logger.error(f"Error parsing pipeline response: {e}")
             return [], []
     
-    def save_parsed_data(self, rocks_array: List[Dict[str, Any]], tasks_array: List[Dict[str, Any]], file_prefix: str = None) -> Tuple[str, str]:
+    async def insert_to_db(self, rocks_array, tasks_array):
+        if rocks_array:
+            await db.rocks.insert_many(rocks_array)
+        if tasks_array:
+            await db.tasks.insert_many(tasks_array)
+    
+    async def save_parsed_data(self, rocks_array: List[Dict[str, Any]], tasks_array: List[Dict[str, Any]], file_prefix: str = None) -> Tuple[str, str]:
         """
-        Save the parsed rocks and tasks arrays to separate JSON files
+        Save the parsed rocks and tasks arrays to separate JSON files and insert them into the database
         
         Args:
             rocks_array: Array of rock objects
@@ -120,6 +128,13 @@ class DataParserService:
             with open(tasks_file, "w", encoding="utf-8") as f:
                 json.dump(tasks_array, f, indent=2, ensure_ascii=False)
             
+            # Insert into database directly from arrays
+            try:
+                await self.insert_to_db(rocks_array, tasks_array)
+                logger.info(f"Inserted {len(rocks_array)} rocks and {len(tasks_array)} tasks into the database.")
+            except Exception as db_exc:
+                logger.error(f"Error inserting rocks/tasks into database: {db_exc}")
+            
             logger.info(f"Parsed data saved to: {rocks_file} and {tasks_file}")
             return rocks_file, tasks_file
             
@@ -127,7 +142,7 @@ class DataParserService:
             logger.error(f"Error saving parsed data: {e}")
             return "", ""
     
-    def parse_and_save(self, pipeline_response: Dict[str, Any], file_prefix: str = None, quarter_id: str = "", participants: list = None) -> Tuple[str, str]:
+    async def parse_and_save(self, pipeline_response: Dict[str, Any], file_prefix: str = None, quarter_id: str = "", participants: list = None) -> Tuple[str, str]:
         """
         Parse pipeline response and save to files in one operation
         
@@ -141,10 +156,10 @@ class DataParserService:
             Tuple of (rocks_file_path, tasks_file_path)
         """
         rocks_array, tasks_array = self.parse_pipeline_response(pipeline_response, quarter_id, participants)
-        return self.save_parsed_data(rocks_array, tasks_array, file_prefix)
+        return await self.save_parsed_data(rocks_array, tasks_array, file_prefix)
 
 # Convenience function for easy usage
-def parse_pipeline_response_to_files(pipeline_response: Dict[str, Any], file_prefix: str = None, quarter_id: str = "", participants: list = None) -> Tuple[str, str]:
+async def parse_pipeline_response_to_files(pipeline_response: Dict[str, Any], file_prefix: str = None, quarter_id: str = "", participants: list = None) -> Tuple[str, str]:
     """
     Convenience function to parse pipeline response and save to files
     
@@ -158,4 +173,4 @@ def parse_pipeline_response_to_files(pipeline_response: Dict[str, Any], file_pre
         Tuple of (rocks_file_path, tasks_file_path)
     """
     parser = DataParserService()
-    return parser.parse_and_save(pipeline_response, file_prefix, quarter_id, participants) 
+    return await parser.parse_and_save(pipeline_response, file_prefix, quarter_id, participants) 
