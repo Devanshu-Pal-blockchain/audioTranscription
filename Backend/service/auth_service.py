@@ -14,7 +14,7 @@ from .user_service import UserService
 # JWT Configuration
 SECRET_KEY = "your-secret-key"  # Should be loaded from environment in production
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 500
 
 # OAuth2 scheme for token handling
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
