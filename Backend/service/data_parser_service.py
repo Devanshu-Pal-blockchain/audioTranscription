@@ -104,12 +104,13 @@ class DataParserService:
             await db.rocks.insert_many(rocks_array)
             # Ensure user assigned_rocks is in sync for each rock
             from service.user_service import UserService
+            from uuid import UUID
             for rock in rocks_array:
                 assigned_to_id = rock.get("assigned_to_id")
                 rock_id = rock.get("rock_id")
                 if assigned_to_id and rock_id:
                     try:
-                        await UserService.assign_rock(UUID(assigned_to_id), UUID(rock_id))
+                        await UserService.assign_rock(UUID(str(assigned_to_id)), UUID(str(rock_id)))
                     except Exception as e:
                         logger.error(f"Failed to sync assigned_rocks for user {assigned_to_id} and rock {rock_id}: {e}")
         if tasks_array:
