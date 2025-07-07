@@ -12,13 +12,28 @@ class UserService:
     @staticmethod
     async def create_user(user: User) -> User:
         """Create a new user with hashed password"""
+        # Convert user to dict
         user_dict = user.model_dump()
-        # Hash the password before storing
-        user_dict["employee_password"] = bcrypt.hash(user_dict["employee_password"])
+        
+        # Hash the password
+        user_dict["employee_password"] = bcrypt.hash(user.employee_password)
+        
+        # Set timestamps
         user_dict["created_at"] = datetime.utcnow()
         user_dict["updated_at"] = datetime.utcnow()
-        await UserService.collection.insert_one(user_dict)
-        return user
+        
+        # Convert UUIDs to strings for MongoDB
+        user_dict["employee_id"] = str(user_dict["employee_id"])
+        user_dict["assigned_rocks"] = [str(rock) for rock in user_dict["assigned_rocks"]]
+        
+        # Insert into database
+        result = await UserService.collection.insert_one(user_dict)
+        if not result.inserted_id:
+            raise HTTPException(status_code=500, detail="Failed to create user")
+            
+        # Convert the MongoDB document back to a User model
+        user_dict["_id"] = result.inserted_id
+        return User.model_validate(user_dict)
 
     @staticmethod
     async def get_user(user_id: UUID) -> Optional[User]:
@@ -26,15 +41,21 @@ class UserService:
         user_dict = await UserService.collection.find_one({"employee_id": str(user_id)})
         if not user_dict:
             return None
-        return User(**user_dict)
+        # Convert string IDs to UUIDs
+        user_dict["employee_id"] = UUID(user_dict["employee_id"])
+        user_dict["assigned_rocks"] = [UUID(rock_id) for rock_id in user_dict.get("assigned_rocks", [])]
+        return User.model_validate(user_dict)
 
     @staticmethod
     async def get_user_by_email(email: str) -> Optional[User]:
         """Get a user by email"""
         user_dict = await UserService.collection.find_one({"employee_email": email})
-        if not user_dict:
-            return None
-        return User(**user_dict)
+        if user_dict:
+            # Convert string UUIDs back to UUID objects
+            user_dict["employee_id"] = UUID(user_dict["employee_id"])
+            user_dict["assigned_rocks"] = [UUID(rock) for rock in user_dict["assigned_rocks"]]
+            return User.model_validate(user_dict)
+        return None
 
     @staticmethod
     async def get_users(role: Optional[str] = None) -> List[User]:

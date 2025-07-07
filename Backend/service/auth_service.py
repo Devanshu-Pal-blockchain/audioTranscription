@@ -75,10 +75,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     except JWTError:
         raise credentials_exception
 
-    user = await UserService.get_user(UUID(token_data.employee_id))
-    if user is None:
-        raise credentials_exception
-    return user
+    try:
+        user = await UserService.get_user(UUID(token_data.employee_id))
+        if user is None:
+            raise credentials_exception
+        return user
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid employee ID format"
+        )
 
 async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
     """Get current active user"""

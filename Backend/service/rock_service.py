@@ -3,19 +3,18 @@ from uuid import UUID
 from fastapi import HTTPException
 from models.rock import Rock
 from models.task import Task
-from .db import db
+from .base_service import BaseService
 from .user_service import UserService
-from .task_service import TaskService
 from datetime import datetime
 
-class RockService:
-    collection = db.rocks
+class RockService(BaseService):
+    """Service for managing rocks"""
 
     @staticmethod
     async def create_rock(rock: Rock) -> Rock:
         """Create a new rock and update user's assigned rocks"""
         rock_dict = rock.model_dump()
-        await RockService.collection.insert_one(rock_dict)
+        await RockService.rocks.insert_one(rock_dict)
         
         # Update user's assigned rocks (two-way reference)
         if rock.assigned_to_id:
@@ -26,7 +25,7 @@ class RockService:
     @staticmethod
     async def get_rock(rock_id: UUID) -> Optional[Rock]:
         """Get a rock by ID"""
-        rock_dict = await RockService.collection.find_one({"rock_id": str(rock_id)})
+        rock_dict = await RockService.rocks.find_one({"rock_id": str(rock_id)})
         if not rock_dict:
             return None
         return Rock(**rock_dict)
@@ -34,7 +33,7 @@ class RockService:
     @staticmethod
     async def get_rock_by_quarter(quarter_id: UUID, rock_id: UUID) -> Optional[Rock]:
         """Get a specific rock in a quarter"""
-        rock_dict = await RockService.collection.find_one({
+        rock_dict = await RockService.rocks.find_one({
             "quarter_id": str(quarter_id),
             "rock_id": str(rock_id)
         })
@@ -46,7 +45,7 @@ class RockService:
     async def get_rocks_by_quarter(quarter_id: UUID) -> List[Rock]:
         """Get all rocks for a specific quarter"""
         rocks = []
-        async for rock_dict in RockService.collection.find({"quarter_id": str(quarter_id)}):
+        async for rock_dict in RockService.rocks.find({"quarter_id": str(quarter_id)}):
             rocks.append(Rock(**rock_dict))
         return rocks
 
@@ -57,14 +56,15 @@ class RockService:
         rocks = await RockService.get_rocks_by_quarter(quarter_id)
         
         for rock in rocks:
-            tasks = await TaskService.get_tasks_by_rock(rock.rock_id)
-            rock_dict = rock.model_dump()
-            
-            if not include_comments:
-                # Remove comments from tasks
-                for task in tasks:
+            # Get tasks directly from tasks collection
+            tasks = []
+            async for task_dict in RockService.tasks.find({"rock_id": str(rock.rock_id)}):
+                task = Task(**task_dict)
+                if not include_comments:
                     task.comments = []
+                tasks.append(task)
             
+            rock_dict = rock.model_dump()
             rock_dict["tasks"] = [task.model_dump() for task in tasks]
             rocks_with_tasks.append(rock_dict)
         
@@ -74,7 +74,7 @@ class RockService:
     async def get_rocks_by_user(user_id: UUID) -> List[Rock]:
         """Get all rocks assigned to a specific user"""
         rocks = []
-        async for rock_dict in RockService.collection.find({"assigned_to_id": str(user_id)}):
+        async for rock_dict in RockService.rocks.find({"assigned_to_id": str(user_id)}):
             rocks.append(Rock(**rock_dict))
         return rocks
 
@@ -89,7 +89,7 @@ class RockService:
         update_data = rock_update.model_dump(exclude={"id", "created_at"})
         update_data["updated_at"] = datetime.utcnow()
         
-        await RockService.collection.update_one(
+        await RockService.rocks.update_one(
             {"rock_id": str(rock_id)},
             {"$set": update_data}
         )
@@ -108,7 +108,7 @@ class RockService:
     @staticmethod
     async def update_smart_objective(rock_id: UUID, smart_objective: str) -> Optional[Rock]:
         """Update a rock's SMART objective"""
-        result = await RockService.collection.find_one_and_update(
+        result = await RockService.rocks.find_one_and_update(
             {"rock_id": str(rock_id)},
             {
                 "$set": {
@@ -129,7 +129,7 @@ class RockService:
             # Remove rock from user's assigned rocks
             await UserService.unassign_rock(rock.assigned_to_id, rock_id)
 
-        result = await RockService.collection.delete_one({"rock_id": str(rock_id)})
+        result = await RockService.rocks.delete_one({"rock_id": str(rock_id)})
         return result.deleted_count > 0
 
     @staticmethod
@@ -143,7 +143,7 @@ class RockService:
                 detail="Rock is already assigned to a user"
             )
 
-        result = await RockService.collection.find_one_and_update(
+        result = await RockService.rocks.find_one_and_update(
             {"rock_id": str(rock_id)},
             {
                 "$set": {
@@ -169,7 +169,7 @@ class RockService:
         if rock and rock.assigned_to_id:
             await UserService.unassign_rock(rock.assigned_to_id, rock_id)
 
-        result = await RockService.collection.find_one_and_update(
+        result = await RockService.rocks.find_one_and_update(
             {"rock_id": str(rock_id)},
             {
                 "$unset": {
@@ -198,28 +198,32 @@ class RockService:
     @staticmethod
     async def update_rock_and_tasks(
         quarter_id: UUID,
-        rock_id: UUID,
         rock_update: Rock,
         tasks_update: List[Task]
     ) -> Tuple[Optional[Rock], List[Task]]:
-        """Update a rock and its tasks in a quarter"""
-        # Verify rock belongs to quarter
-        rock = await RockService.get_rock_by_quarter(quarter_id, rock_id)
-        if not rock:
+        """Update a rock and its tasks atomically"""
+        # Validate rock exists in quarter
+        current_rock = await RockService.get_rock_by_quarter(quarter_id, rock_update.rock_id)
+        if not current_rock:
             return None, []
 
         # Update rock
-        updated_rock = await RockService.update_rock(rock_id, rock_update)
+        updated_rock = await RockService.update_rock(rock_update.rock_id, rock_update)
         if not updated_rock:
             return None, []
 
         # Update tasks
         updated_tasks = []
         for task in tasks_update:
-            if task.rock_id != rock_id:
-                continue
-            updated_task = await TaskService.update_task(task.task_id, task)
-            if updated_task:
-                updated_tasks.append(updated_task)
+            task_dict = task.model_dump()
+            task_dict["rock_id"] = str(rock_update.rock_id)
+            task_dict["updated_at"] = datetime.utcnow()
+            
+            await RockService.tasks.update_one(
+                {"task_id": str(task.task_id)},
+                {"$set": task_dict},
+                upsert=True
+            )
+            updated_tasks.append(task)
 
         return updated_rock, updated_tasks 

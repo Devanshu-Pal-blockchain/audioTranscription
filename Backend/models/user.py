@@ -9,25 +9,15 @@ class User(BaseModel):
             UUID: str,
             datetime: lambda v: v.isoformat()
         },
-        populate_by_name=True,
-        json_schema_extra={
-            "example": {
-                "employee_name": "John Doe",
-                "employee_email": "john.doe@company.com",
-                "employee_password": "hashed_password_here",
-                "employee_role": "employee",
-                "assigned_rocks": []
-            }
-        }
+        from_attributes=True
     )
 
-    id: UUID = Field(default_factory=uuid4)
+    employee_name: str
+    employee_email: EmailStr
+    employee_password: str
+    employee_role: Literal["admin", "employee"] = "employee"
     employee_id: UUID = Field(default_factory=uuid4)
-    employee_name: str = Field(min_length=1, description="Employee name")
-    employee_email: EmailStr = Field(description="Employee email")
-    employee_password: str = Field(min_length=8, description="Hashed password")
-    employee_role: Literal["admin", "employee"] = Field(description="Employee role")
-    assigned_rocks: List[UUID] = Field(default_factory=list, description="List of assigned rock IDs")
+    assigned_rocks: List[UUID] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

@@ -838,4 +838,190 @@ This project aims to create an enterprise-level meeting management and goal trac
 
 ---
 Last Updated: [Current Date]
-Note: This is a living document that will be continuously updated throughout the project development. 
+Note: This is a living document that will be continuously updated throughout the project development.
+
+# Audio Processing Pipeline
+
+## Overview
+
+The audio processing pipeline takes meeting recordings and automatically generates ROCKS and tasks. The pipeline consists of several stages:
+
+1. Audio Processing
+   - Transcribes audio using Groq's Whisper model
+   - Handles large files by chunking
+   - Produces clean transcript
+
+2. Semantic Analysis
+   - Tokenizes transcript into segments
+   - Extracts entities, dates, people, organizations
+   - Identifies action items and key phrases
+
+3. ROCKS Generation
+   - Analyzes segments in parallel using Gemini
+   - Generates structured ROCKS with weekly tasks
+   - Validates output format
+   - Integrates with employee roles from CSV
+
+4. Database Integration
+   - Parses ROCKS and tasks into collection format
+   - Associates with quarters and users
+   - Maintains data consistency
+
+## API Endpoints
+
+### Upload Endpoints
+
+1. POST `/admin/upload-audio`
+   - Upload and process meeting recording
+   - Admin only
+   - Parameters:
+     - `file`: Audio file (mp3, wav, ogg, flac, m4a, webm)
+     - `quarter_id`: Optional quarter to associate ROCKS with
+   - Background processing
+   - Returns upload status and pipeline information
+
+## Environment Variables
+
+- `GEMINI_API_KEY_SCRIPT`: Google Gemini API key
+- `GEMINI_MODEL`: Model name (default: gemini-1.5-flash)
+
+## Dependencies
+
+Required packages:
+- pydub: Audio processing
+- spacy: NLP processing
+- google-generativeai: ROCKS generation
+- groq: Audio transcription
+- demjson3: JSON parsing
+
+## File Structure
+
+```
+services/
+  pipeline/
+    script_pipeline_service.py  - Core pipeline logic
+    data_parser_service.py      - Collection data parsing
+routes/
+  upload.py                     - Upload endpoints
+```
+
+## Usage
+
+1. Ensure test.csv exists with employee roles (format: Full Name, Job Role)
+2. Upload audio file via API
+3. Pipeline runs in background:
+   - Transcribes audio
+   - Analyzes content
+   - Generates ROCKS and tasks
+4. Data saved to database if quarter_id provided
+5. Access via existing collection endpoints
+
+## Integration Flow
+
+1. Frontend Upload:
+   - Send audio file to `/admin/upload-audio`
+   - Optionally provide quarter_id
+
+2. Backend Processing:
+   - Save audio temporarily
+   - Start background pipeline
+   - Return immediate response
+
+3. Pipeline Execution:
+   - Transcribe audio (Groq Whisper)
+   - Semantic analysis (spaCy)
+   - ROCKS generation (Gemini)
+   - Parse and validate data
+
+4. Database Integration:
+   - Create rocks in quarter
+   - Create tasks for rocks
+   - Link everything properly
+
+5. Cleanup:
+   - Remove temporary audio file
+   - Log completion status
+
+## Error Handling
+
+- Audio file validation
+- Pipeline error tracking
+- Database transaction safety
+- Background task monitoring
+- Proper cleanup on failure
+
+# Audio Processing Pipeline
+
+## Overview
+
+The audio processing pipeline takes meeting recordings and automatically generates ROCKS and tasks. The pipeline consists of several stages:
+
+1. Audio Processing
+   - Transcribes audio using Groq's Whisper model
+   - Handles large files by chunking
+   - Produces clean transcript
+
+2. Semantic Analysis
+   - Tokenizes transcript into segments
+   - Extracts entities, dates, people, organizations
+   - Identifies action items and key phrases
+
+3. ROCKS Generation
+   - Analyzes segments in parallel using Gemini
+   - Generates structured ROCKS with weekly tasks
+   - Validates output format
+   - Integrates with employee roles from CSV
+
+4. Database Integration
+   - Parses ROCKS and tasks into collection format
+   - Associates with quarters and users
+   - Maintains data consistency
+
+## API Endpoints
+
+### Upload Endpoints
+
+1. POST `/admin/upload-audio`
+   - Upload and process meeting recording
+   - Admin only
+   - Parameters:
+     - `file`: Audio file (mp3, wav, ogg, flac, m4a, webm)
+     - `quarter_id`: Optional quarter to associate ROCKS with
+   - Background processing
+   - Returns upload status and pipeline information
+
+## Environment Variables
+
+- `GEMINI_API_KEY_SCRIPT`: Google Gemini API key
+- `GEMINI_MODEL`: Model name (default: gemini-1.5-flash)
+
+## Dependencies
+
+Required packages:
+- pydub: Audio processing
+- spacy: NLP processing
+- google-generativeai: ROCKS generation
+- groq: Audio transcription
+- demjson3: JSON parsing
+
+## File Structure
+
+```
+services/
+  pipeline/
+    script_pipeline_service.py  - Core pipeline logic
+    data_parser_service.py      - Collection data parsing
+routes/
+  upload.py                     - Upload endpoints
+```
+
+## Usage
+
+1. Ensure test.csv exists with employee roles (format: Full Name, Job Role)
+2. Upload audio file via API
+3. Pipeline runs in background:
+   - Transcribes audio
+   - Analyzes content
+   - Generates ROCKS and tasks
+4. Data saved to database if quarter_id provided
+5. Access via existing collection endpoints 
