@@ -34,7 +34,7 @@ class Quarter(BaseModel):
     title: str = Field(min_length=1, description="Quarter title")
     description: str = Field(default="", description="Quarter description")
     participants: List[UUID] = Field(default_factory=list, description="List of participant UUIDs")
-    status: Optional[int] = Field(description="Quarter status (0 = draft, 1 = saved)")
+    status: int = Field(default=0, description="Quarter status (0 = draft, 1 = saved)")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
