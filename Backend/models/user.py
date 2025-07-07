@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Literal
+from typing import List, Dict, Any, Literal, Optional
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from datetime import datetime
@@ -17,7 +17,7 @@ class User(BaseModel):
     employee_password: str
     employee_role: Literal["admin", "employee"] = "employee"
     employee_id: UUID = Field(default_factory=uuid4)
-    assigned_rocks: List[UUID] = Field(default_factory=list)
+    assigned_rocks: Optional[List[UUID]] = Field(default_factory=list, description="Optional list of assigned rock UUIDs")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

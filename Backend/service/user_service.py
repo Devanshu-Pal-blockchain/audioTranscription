@@ -24,7 +24,11 @@ class UserService:
         
         # Convert UUIDs to strings for MongoDB
         user_dict["employee_id"] = str(user_dict["employee_id"])
-        user_dict["assigned_rocks"] = [str(rock) for rock in user_dict["assigned_rocks"]]
+        # Handle optional assigned_rocks
+        if user_dict.get("assigned_rocks") is not None:
+            user_dict["assigned_rocks"] = [str(rock) for rock in user_dict["assigned_rocks"]]
+        else:
+            user_dict["assigned_rocks"] = []
         
         # Insert into database
         result = await UserService.collection.insert_one(user_dict)
