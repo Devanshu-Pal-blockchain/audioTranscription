@@ -12,7 +12,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from models.user import User
 from service.auth_service import admin_required
-from service.script_pipeline_service import run_pipeline_for_audio, PipelineService
+from service.script_pipeline_service import run_pipeline_for_audio, PipelineService, run_pipeline_for_transcript
 from service.data_parser_service import parse_pipeline_response_to_files
 from service.meeting_json_service import save_raw_context_json
 
@@ -25,21 +25,86 @@ router = APIRouter()
 @router.post("/upload-transcript")
 async def upload_transcript(
     file: UploadFile = File(...),
+    quarterWeeks: Optional[str] = Form(None),
+    id: Optional[str] = Form(None),
+    participants: Optional[str] = Form(None),
     current_user: User = Depends(admin_required)
 ):
     """
-    Upload a transcript (raw context) JSON file and save to the raw context collection only.
+    Upload a transcript (raw context) JSON file, save to the raw context collection, and run the pipeline from step 2.
     """
-    # Read uploaded file content directly and save to raw context collection
-    file_content = await file.read()
     import io
+    import json
+
+    # Read uploaded file content and save to raw context collection
+    file_content = await file.read()
     class DummyFile:
         def __init__(self, content):
             self.file = io.BytesIO(content)
         def read(self):
             return self.file.read()
     save_raw_context_json(DummyFile(file_content), str(current_user.employee_id))
-    return {"message": f"Transcript file '{file.filename}' uploaded and saved to raw context collection."}
+
+    # Parse transcript JSON
+    try:
+        transcript_json = json.loads(file_content)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid transcript JSON: {e}")
+
+    # Require quarterWeeks and id (quarter_id)
+    if quarterWeeks is None:
+        raise HTTPException(status_code=400, detail="quarterWeeks is required from the frontend.")
+    try:
+        num_weeks = int(quarterWeeks)
+    except Exception:
+        raise HTTPException(status_code=400, detail="quarterWeeks must be an integer.")
+    if id is None:
+        raise HTTPException(status_code=400, detail="id (quarter_id) is required from the frontend.")
+    quarter_id = id
+
+    # Fetch participant details from the database using participant IDs
+    participant_ids = []
+    participant_info = []
+    if participants:
+        participant_ids = [pid.strip() for pid in participants.split(",") if pid.strip()]
+        participant_details = await UserService.get_users_by_ids(participant_ids)
+        found_ids = {str(user.employee_id) for user in participant_details}
+        missing_ids = [pid for pid in participant_ids if pid not in found_ids]
+        if missing_ids:
+            logger.warning(f"Some participant IDs from the frontend were not found in the database: {missing_ids}")
+        participant_info = [
+            {
+                "employee_id": str(user.employee_id),
+                "employee_name": user.employee_name,
+                "employee_responsibilities": user.employee_responsibilities,
+                "employee_designation": user.employee_designation
+            }
+            for user in participant_details
+        ]
+        logger.info(f"Fetched participant info: {participant_info}")
+
+    # Start pipeline in background (non-blocking)
+    async def process_transcript_background(current_user):
+        try:
+            result = await run_pipeline_for_transcript(
+                transcript_json,
+                num_weeks=num_weeks,
+                quarter_id=quarter_id,
+                participants=participant_info,
+                admin_id=str(current_user.employee_id)
+            )
+            if "error" in result:
+                print(f"Pipeline (from transcript) failed: {result['error']}")
+            else:
+                print("Pipeline (from transcript) completed successfully!")
+        except Exception as e:
+            print(f"Background pipeline (from transcript) error: {e}")
+    asyncio.create_task(process_transcript_background(current_user))
+
+    return {
+        "message": f"Transcript file '{file.filename}' uploaded, saved to raw context collection, and pipeline started.",
+        "participants": participant_info
+    }
 
 from fastapi import Form
 

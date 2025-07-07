@@ -790,7 +790,10 @@ EXTRACTED INFORMATION:
             # Step 1: Audio Processing
             transcription_data = self.process_audio(audio_file)
             log_step_completion("Step 1: Audio Processing")
-            
+
+            # Save transcript to raw context collection in DB
+            self._save_to_database(transcription_data, context_type="raw")
+
             # Step 2: Semantic Tokenization
             semantic_data = self.semantic_tokenization(transcription_data)
             log_step_completion("Step 2: Semantic Tokenization")
@@ -841,8 +844,76 @@ EXTRACTED INFORMATION:
             logger.error(f"Pipeline failed: {e}")
             return {"error": str(e), "status": "failed"}
 
+    async def run_pipeline_for_transcript(self, transcript_json: dict, num_weeks: int, quarter_id: str, participants: list) -> dict:
+        """
+        Run the pipeline starting from step 2 (semantic tokenization), using a provided transcript JSON.
+        """
+        try:
+            from service.data_parser_service import parse_pipeline_response_to_files
+            from datetime import datetime
+            # Create timestamp for file naming
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_prefix = f"pipeline_{timestamp}"
+
+            # Step 2: Semantic Tokenization (transcript_json is already in the correct structure)
+            semantic_data = self.semantic_tokenization(transcript_json)
+            log_step_completion("Step 2: Semantic Tokenization (from transcript)")
+
+            # Step 3: Parallel Segment Analysis
+            segment_analyses = await self.parallel_segment_analysis(semantic_data)
+            log_step_completion("Step 3: Parallel Segment Analysis")
+
+            # Step 4: Combine Segments and Generate ROCKS
+            rocks_data = await self.combine_segments_and_generate_rocks(segment_analyses, num_weeks, participants)
+
+            # Check if ROCKS generation failed
+            if "error" in rocks_data:
+                logger.error(f"ROCKS generation failed: {rocks_data['error']}")
+                return rocks_data
+
+            # Validate ROCKS structure
+            validation = self.validate_rocks_structure(rocks_data, num_weeks)
+            if not validation["valid"]:
+                logger.warning("ROCKS structure validation issues found:")
+                for issue in validation["issues"]:
+                    logger.warning(f"  - {issue}")
+
+            log_step_completion("Step 4: ROCKS Generation")
+
+            # Create final response (only ROCKS data)
+            final_response = rocks_data
+
+            # Save final response
+            final_file = "final_response.json"
+            with open(final_file, "w", encoding="utf-8") as f:
+                json.dump(final_response, f, indent=2, ensure_ascii=False)
+
+            # Parse final response into Rock and Task collections, always passing quarter_id and participants
+            log_step_completion("Step 5: Data Parsing")
+            rocks_file, tasks_file = await parse_pipeline_response_to_files(final_response, file_prefix, quarter_id, participants)
+
+            if rocks_file and tasks_file:
+                logger.info(f"Parsed data saved to: {rocks_file} and {tasks_file}")
+            else:
+                logger.error("Failed to parse and save data")
+
+            print("Pipeline (from transcript) completed successfully!")
+
+            return final_response
+
+        except Exception as e:
+            logger.error(f"Pipeline (from transcript) failed: {e}")
+            return {"error": str(e), "status": "failed"}
+
 # Convenience function for easy usage
 async def run_pipeline_for_audio(audio_file: str, num_weeks: int, quarter_id: str, participants: list, admin_id: str = "default_admin") -> Dict[str, Any]:
     """Convenience function to run pipeline for a given audio file"""
     pipeline = PipelineService(admin_id)
-    return await pipeline.run_pipeline(audio_file, num_weeks, quarter_id, participants) 
+    return await pipeline.run_pipeline(audio_file, num_weeks, quarter_id, participants)
+
+async def run_pipeline_for_transcript(transcript_json: dict, num_weeks: int, quarter_id: str, participants: list, admin_id: str = "default_admin") -> dict:
+    """
+    Convenience function to run pipeline for a given transcript JSON
+    """
+    pipeline = PipelineService(admin_id)
+    return await pipeline.run_pipeline_for_transcript(transcript_json, num_weeks, quarter_id, participants) 
