@@ -1,6 +1,6 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Union
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from datetime import datetime
 
 class Comment(BaseModel):
@@ -59,10 +59,35 @@ class Task(BaseModel):
     week: int = Field(gt=0, description="Week number for this task")
     task_id: UUID = Field(default_factory=uuid4)
     task: str = Field(min_length=1, description="Task description")
-    sub_tasks: Optional[Dict[str, str]] = Field(default=None, description="Optional subtasks")
-    comments: list[Comment] = Field(default_factory=list, description="List of comments")
+    sub_tasks: Optional[Union[Dict[str, str], List]] = Field(default=None, description="Optional subtasks")
+    comments: Union[List[Comment], Dict, List] = Field(default_factory=list, description="List of comments")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    @field_validator('sub_tasks', mode='before')
+    @classmethod
+    def validate_sub_tasks(cls, v):
+        """Convert empty list to None or dict for sub_tasks"""
+        if v == []:
+            return None
+        elif isinstance(v, list) and len(v) == 0:
+            return None
+        return v
+
+    @field_validator('comments', mode='before')
+    @classmethod
+    def validate_comments(cls, v):
+        """Convert various comment formats to list of Comment objects"""
+        if v is None or v == []:
+            return []
+        elif isinstance(v, dict):
+            # Single comment object, convert to list
+            if v.get('comment_id') == '' and v.get('commented_by') == '':
+                return []  # Empty comment, return empty list
+            return [v]
+        elif isinstance(v, list):
+            return v
+        return []
 
     def model_dump(self, *args, **kwargs) -> Dict[str, Any]:
         """Override model_dump method to exclude None values and ObjectId"""

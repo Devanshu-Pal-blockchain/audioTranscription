@@ -337,14 +337,14 @@ async def get_user_quarters_with_data(
     total_tasks = 0
     
     for quarter in quarters:
-        if not quarter.quarter_id:
+        if not quarter.id:
             continue
             
         # Get rocks for this quarter
         if current_user.employee_role == "admin":
-            rocks = await RockService.get_rocks_by_quarter(quarter.quarter_id)
+            rocks = await RockService.get_rocks_by_quarter(quarter.id)
         else:
-            all_rocks = await RockService.get_rocks_by_quarter(quarter.quarter_id)
+            all_rocks = await RockService.get_rocks_by_quarter(quarter.id)
             rocks = [rock for rock in all_rocks if str(rock.assigned_to_id) == str(current_user.employee_id)]
         
         # Get tasks for each rock

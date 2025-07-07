@@ -27,7 +27,6 @@ class Quarter(BaseModel):
     )
 
     id: UUID = Field(default_factory=uuid4)
-    quarter_id: Optional[UUID] = Field(default=None)
     quarter: str = Field(description="Quarter identifier (Q1, Q2, Q3, Q4)", pattern="^Q[1-4]$")
     weeks: int = Field(gt=0, description="Number of weeks in the quarter")
     year: int = Field(gt=1900, lt=10000, description="Year of the quarter")
