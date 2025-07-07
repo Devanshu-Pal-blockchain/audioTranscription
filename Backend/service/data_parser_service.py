@@ -102,6 +102,16 @@ class DataParserService:
     async def insert_to_db(self, rocks_array, tasks_array):
         if rocks_array:
             await db.rocks.insert_many(rocks_array)
+            # Ensure user assigned_rocks is in sync for each rock
+            from service.user_service import UserService
+            for rock in rocks_array:
+                assigned_to_id = rock.get("assigned_to_id")
+                rock_id = rock.get("rock_id")
+                if assigned_to_id and rock_id:
+                    try:
+                        await UserService.assign_rock(UUID(assigned_to_id), UUID(rock_id))
+                    except Exception as e:
+                        logger.error(f"Failed to sync assigned_rocks for user {assigned_to_id} and rock {rock_id}: {e}")
         if tasks_array:
             await db.tasks.insert_many(tasks_array)
     
