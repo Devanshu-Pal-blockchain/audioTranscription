@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import quarter, rock, task, user, auth, upload, csv_routes
-
+import logging
 app = FastAPI(
     title="Meeting Transcription API",
     description="API for managing meeting transcriptions, rocks, tasks, and users",

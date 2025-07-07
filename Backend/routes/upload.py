@@ -1,5 +1,8 @@
+from jose import jwt, JWTError
+from service.user_service import UserService
 
 import os
+import logging
 import asyncio
 import tempfile
 import json
@@ -17,48 +20,26 @@ load_dotenv()
 
 router = APIRouter()
 
-# New endpoint: Upload transcript (raw context) JSON and start pipeline from transcript step
+
+# New endpoint: Upload transcript (raw context) JSON and save to DB only
 @router.post("/upload-transcript")
 async def upload_transcript(
     file: UploadFile = File(...),
     current_user: User = Depends(admin_required)
 ):
     """
-    Upload a transcript (raw context) JSON file, save to DB, and start the script pipeline from transcript step.
+    Upload a transcript (raw context) JSON file and save to the raw context collection only.
     """
-    # Save uploaded file to a temp location
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".json", dir="uploaded_audios") as tmp:
-        tmp.write(await file.read())
-        tmp_path = tmp.name
-
-    # Save to raw context collection
-    with open(tmp_path, "r", encoding="utf-8") as f:
-        class DummyFile:
-            def __init__(self, file):
-                self.file = file
-        save_raw_context_json(DummyFile(f), str(current_user.employee_id))
-
-    # Start pipeline from transcript step in background
-    async def process_transcript_background():
-        try:
-            # Load transcript JSON
-            with open(tmp_path, "r", encoding="utf-8") as f:
-                transcript_json = json.load(f)
-            # Start pipeline from transcript step (skip audio)
-            pipeline = PipelineService(str(current_user.employee_id))
-            result = await pipeline.run_pipeline_from_transcript(transcript_json, num_weeks=12)
-            print("Transcript pipeline completed!", result)
-        except Exception as e:
-            print(f"Transcript pipeline error: {e}")
-        finally:
-            try:
-                os.remove(tmp_path)
-            except:
-                pass
-
-    asyncio.create_task(process_transcript_background())
-
-    return {"message": f"Transcript file '{file.filename}' uploaded. Pipeline started in background."}
+    # Read uploaded file content directly and save to raw context collection
+    file_content = await file.read()
+    import io
+    class DummyFile:
+        def __init__(self, content):
+            self.file = io.BytesIO(content)
+        def read(self):
+            return self.file.read()
+    save_raw_context_json(DummyFile(file_content), str(current_user.employee_id))
+    return {"message": f"Transcript file '{file.filename}' uploaded and saved to raw context collection."}
 
 from fastapi import Form
 
@@ -77,8 +58,10 @@ async def admin_required(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.")
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+
+# Set up logging (only once, at the top of the file)
+if not logging.getLogger().hasHandlers():
+    logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @router.post("/upload-audio")
