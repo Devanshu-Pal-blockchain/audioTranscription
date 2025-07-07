@@ -13,6 +13,9 @@ class QuarterService:
     async def create_quarter(quarter: Quarter) -> Quarter:
         """Create a new quarter"""
         quarter_dict = quarter.model_dump()
+        # Remove status field if it's None to avoid storing null values
+        if quarter_dict.get('status') is None:
+            quarter_dict.pop('status', None)
         result = await QuarterService.collection.insert_one(quarter_dict)
         quarter.quarter_id = result.inserted_id
         return quarter
