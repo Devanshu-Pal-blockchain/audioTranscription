@@ -87,10 +87,15 @@ async def update_user(
         )
     return updated_user
 
+from pydantic import BaseModel
+
+class PasswordUpdateRequest(BaseModel):
+    new_password: str
+
 @router.put("/users/{user_id}/password")
 async def update_password(
     user_id: UUID,
-    new_password: str,
+    body: PasswordUpdateRequest,
     current_user: User = Depends(get_current_user)
 ) -> dict:
     """Update a user's password"""
@@ -100,7 +105,7 @@ async def update_password(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only update your own password"
         )
-    success = await UserService.update_password(user_id, new_password)
+    success = await UserService.update_password(user_id, body.new_password)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
