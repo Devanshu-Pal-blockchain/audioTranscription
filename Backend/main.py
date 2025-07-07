@@ -1,25 +1,35 @@
-
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from routes import quarter, rock, task, user, auth
 
+app = FastAPI(
+    title="Meeting Transcription API",
+    description="API for managing meeting transcriptions, rocks, tasks, and users",
+    version="1.0.0"
+)
 
-from routes import auth
-from routes import register
-from routes import upload_csv
-from routes import upload_audio
-from routes import rag
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-app = FastAPI()
-
-
-
-
-
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
-app.include_router(register.router, prefix="/auth", tags=["register"])
-app.include_router(upload_csv.router, prefix="/admin", tags=["admin-csv"])
-app.include_router(upload_audio.router, prefix="/admin", tags=["admin-audio"])
-app.include_router(rag.router, prefix="/rag", tags=["rag-mcp"])
+# Register routes
+app.include_router(auth.router, prefix="/auth", tags=["authentication"])
+app.include_router(quarter.router, tags=["quarters"])
+app.include_router(rock.router, tags=["rocks"])
+app.include_router(task.router, tags=["tasks"])
+app.include_router(user.router, tags=["users"])
 
 @app.get("/")
-def read_root():
-    return {"message": "FastAPI backend is running!"}
+async def root():
+    """Root endpoint returning API information"""
+    return {
+        "name": "Meeting Transcription API",
+        "version": "1.0.0",
+        "description": "API for managing meeting transcriptions, rocks, tasks, and users",
+        "documentation": "/docs"
+    }
