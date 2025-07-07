@@ -2,11 +2,11 @@
 meeting_json_service.py is the ONLY source of truth for context (raw, structured, csv) storage and retrieval in MongoDB. All vector DB (Qdrant) indexing must be triggered from the route after saving. No circular imports.
 """
 import json
-from typing import Optional
+from typing import Optional, Dict, List
 from .db import db
-
 from uuid import uuid4
-
+from datetime import datetime
+from .employee_service import EmployeeService
 
 RAW_CONTEXT_COLLECTION = 'raw_contexts'
 STRUCTURED_CONTEXT_COLLECTION = 'structured_contexts'
@@ -55,14 +55,54 @@ def save_structured_context_json(file, admin_id):
     db[STRUCTURED_CONTEXT_COLLECTION].replace_one({'admin_id': admin_id}, {'admin_id': admin_id, 'context': json_data}, upsert=True)
     return json_data
 
-# Store CSV context in MongoDB
-def save_csv_context(file, admin_id):
-    import pandas as pd
-    content = file.file.read()
-    df = pd.read_csv(pd.io.common.BytesIO(content))
-    data = df.to_dict(orient='records')
-    db[CSV_CONTEXT_COLLECTION].replace_one({'admin_id': admin_id}, {'admin_id': admin_id, 'context': data}, upsert=True)
-    return data
+async def save_csv_context(csv_data: List[Dict], admin_id: str) -> str:
+    """
+    Save CSV context with employee UUIDs
+    Returns: context_id
+    """
+    # Create a new context ID
+    context_id = str(uuid4())
+    
+    # Process each row to add UUIDs
+    processed_rows = []
+    for row in csv_data:
+        # Get or create UUID for employee
+        emp_id = row.get('empId')
+        if emp_id:
+            # Await the UUID creation/retrieval
+            uuid = await EmployeeService.create_or_get_uuid(emp_id)
+            # Add UUID to row data
+            row['employee_uuid'] = uuid
+            
+            # Store additional employee data
+            employee_data = {
+                'name': row.get('name'),
+                'email': row.get('email'),
+                'role': row.get('role'),
+                'responsibilities': row.get('responsibilities')
+            }
+            # Await the employee data update
+            await EmployeeService.update_employee_data(emp_id, employee_data)
+        
+        processed_rows.append(row)
+
+    # Store the processed CSV data
+    document = {
+        'context_id': context_id,
+        'admin_id': admin_id,
+        'csv_data': processed_rows,
+        'created_at': datetime.utcnow(),
+        'updated_at': datetime.utcnow()
+    }
+    
+    # Await the database operation
+    await db[CSV_CONTEXT_COLLECTION].insert_one(document)
+    return context_id
+
+async def fetch_csv_context(context_id: str) -> Optional[Dict]:
+    """Get CSV context by ID"""
+    result = await db[CSV_CONTEXT_COLLECTION].find_one({'context_id': context_id})
+    return result
 
 # Retrieve raw context JSON for admin
 
