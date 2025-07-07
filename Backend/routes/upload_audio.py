@@ -25,7 +25,7 @@ async def admin_required(token: str = Depends(oauth2_scheme)):
 
 @router.post("/upload-audio")
 async def upload_audio(file: UploadFile = File(...), _: str = Depends(admin_required)):
-    allowed_exts = [".mp3", ".wav", ".ogg", ".flac", ".m4a"]
+    allowed_exts = [".mp3", ".wav", ".ogg", ".flac", ".m4a", ".webm"]
     if not any(file.filename.endswith(ext) for ext in allowed_exts):
         raise HTTPException(status_code=400, detail="Only audio files are allowed.")
     # Save file to disk or process as needed

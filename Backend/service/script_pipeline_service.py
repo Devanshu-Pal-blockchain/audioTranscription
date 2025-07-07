@@ -469,7 +469,8 @@ EXTRACTED INFORMATION:
             "rocks": [
                 {{
                     "rock_title": "Clear, actionable title for the major initiative",
-                    "owner": "Full Name (Job Title)" - extract from analysis or from the above list,
+                    "owner": "Full Name" - extract from analysis or from the above list,
+                    "designation":"Job Title" - extract from analysis or from the above list,
                     "smart_objective": "Specific, Measurable, Achievable, Relevant, Time-bound objective with clear success criteria",
                     "weekly_tasks": {weekly_tasks_structure},
                     "review": {{
@@ -484,17 +485,16 @@ EXTRACTED INFORMATION:
         1. Extract 3-4 major rocks (strategic initiatives) from the segment analyses (MAXIMUM 4 ROCKS)
         2. Each rock should be a significant quarterly objective, not a small task
         3. SMART objectives should include specific metrics and deadlines
-        4. Milestones should break down the rock into {num_weeks} weekly actionable tasks (one milestone per week)
+        4. Milestones should break down the rock into {num_weeks}
         5. For each week, provide 3-4 distinct tasks in the 'tasks' array (3 to 4 tasks per week)
-        6. Each task must have a unique task_id in the format "TK001", "TK002", etc. - these IDs must be unique across ALL rocks and weeks (not just within a week)
-        7. Each task object includes an optional "sub_tasks" field - populate this with an array of subtask descriptions if the task can be broken down into smaller components, otherwise leave it as an empty array []
-        8. If specific people aren't mentioned, use the most relevant employee and role from the above list. If no suitable match is found, use a generic role as before (e.g., "Project Manager").
-        9. If detailed milestones aren't available, create logical weekly progression
-        10. Set realistic timelines based on the project scope
-        11. KEEP THE RESPONSE CONCISE - focus on the most important initiatives only
-        12. AVOID UNNECESSARY CONTENT - give direct, concise descriptions without verbose explanations
+        6. Each task object must have a 'task_title' field, and may optionally include a 'sub_tasks' array field. Do NOT include a 'task_id' field. Task IDs will be assigned later in the pipeline.
+        7. If specific people aren't mentioned, use the most relevant employee and role from the above list. If no suitable match is found, use a generic role as before (e.g., "Project Manager").
+        8. If detailed milestones aren't available, create logical weekly progression
+        9. Set realistic timelines based on the project scope
+        10. KEEP THE RESPONSE CONCISE - focus on the most important initiatives only
+        11. AVOID UNNECESSARY CONTENT - give direct, concise descriptions without verbose explanations
         
-        IMPORTANT: Your response must be strictly valid JSON. Do not include any incomplete or malformed objects or arrays. Each milestone must be a JSON object with both 'week' and 'tasks' fields, where 'tasks' is an array of 3-4 task objects. Each task object must have 'task_id' and 'task_title' fields, and may optionally include a 'sub_tasks' array field. Task IDs must be unique across ALL rocks and weeks (e.g., TK001, TK002, TK003, etc.). There must be {num_weeks} milestones (one for each week). Do not include any array elements that are not objects. Do not include any extra or duplicate keys. Do not include any trailing commas. The output must be directly parseable by Python's json.loads().
+        IMPORTANT: Your response must be strictly valid JSON. Do not include any incomplete or malformed objects or arrays. Each milestone must be a JSON object with both 'week' and 'tasks' fields, where 'tasks' is an array of 3-4 task objects. Each task object must have a 'task_title' field, and may optionally include a 'sub_tasks' array field. Do NOT include a 'task_id' field. There must be {num_weeks} milestones (one for each week). Do not include any array elements that are not objects. Do not include any extra or duplicate keys. Do not include any trailing commas. The output must be directly parseable by Python's json.loads().
         """
         
         # Retry loop for JSON generation
@@ -580,20 +580,16 @@ EXTRACTED INFORMATION:
         return roles
     
     def generate_weekly_tasks_structure(self, num_weeks: int) -> str:
-        """Generate the weekly_tasks structure dynamically"""
+        """Generate the weekly_tasks structure dynamically (without task_id)"""
         structure_parts = []
-        task_counter = 1
-        
         for week_num in range(1, num_weeks + 1):
             week_structure = f'''                        {{"week": {week_num}, "tasks": [
-                            {{"task_id": "TK{task_counter:03d}", "task_title": "Task 1 description", "sub_tasks": []}},
-                            {{"task_id": "TK{task_counter + 1:03d}", "task_title": "Task 2 description", "sub_tasks": ["Subtask {task_counter + 1}.1", "Subtask {task_counter + 1}.2"]}},
-                            {{"task_id": "TK{task_counter + 2:03d}", "task_title": "Task 3 description", "sub_tasks": []}},
-                            {{"task_id": "TK{task_counter + 3:03d}", "task_title": "Task 4 description", "sub_tasks": []}}
+                            {{"task_title": "Task 1 description", "sub_tasks": []}},
+                            {{"task_title": "Task 2 description", "sub_tasks": ["Subtask 2.1", "Subtask 2.2"]}},
+                            {{"task_title": "Task 3 description", "sub_tasks": []}},
+                            {{"task_title": "Task 4 description", "sub_tasks": []}}
                         ]}}'''
             structure_parts.append(week_structure)
-            task_counter += 4  # Increment by 4 to account for 3-4 tasks per week
-        
         return f"[\n{',\n'.join(structure_parts)}\n                    ]"
 
     async def generate_rocks(self, analysis_result: Dict[str, Any], num_weeks: int = 12, max_retries: int = 3) -> Dict[str, Any]:
@@ -651,15 +647,14 @@ EXTRACTED INFORMATION:
         3. SMART objectives should include specific metrics and deadlines
         4. Milestones should break down the rock into {num_weeks} weekly actionable tasks (one milestone per week)
         5. For each week, provide 3-4 distinct tasks in the 'tasks' array (3 to 4 tasks per week)
-        6. Each task must have a unique task_id in the format "TK001", "TK002", etc. - these IDs must be unique across ALL rocks and weeks (not just within a week)
-        7. Each task object includes an optional "sub_tasks" field - populate this with an array of subtask descriptions if the task can be broken down into smaller components, otherwise leave it as an empty array []
-        8. If specific people aren't mentioned, use the most relevant employee and role from the above list. If no suitable match is found, use a generic role as before (e.g., "Project Manager").
-        9. If detailed milestones aren't available, create logical weekly progression
-        10. Set realistic timelines based on the project scope
-        11. KEEP THE RESPONSE CONCISE - focus on the most important initiatives only
-        12. AVOID UNNECESSARY CONTENT - give direct, concise descriptions without verbose explanations
+        6. Each task object must have a 'task_title' field, and may optionally include a 'sub_tasks' array field. Do NOT include a 'task_id' field. Task IDs will be assigned later in the pipeline.
+        7. If specific people aren't mentioned, use the most relevant employee and role from the above list. If no suitable match is found, use a generic role as before (e.g., "Project Manager").
+        8. If detailed milestones aren't available, create logical weekly progression
+        9. Set realistic timelines based on the project scope
+        10. KEEP THE RESPONSE CONCISE - focus on the most important initiatives only
+        11. AVOID UNNECESSARY CONTENT - give direct, concise descriptions without verbose explanations
         
-        IMPORTANT: Your response must be strictly valid JSON. Do not include any incomplete or malformed objects or arrays. Each milestone must be a JSON object with both 'week' and 'tasks' fields, where 'tasks' is an array of 3-4 task objects. Each task object must have 'task_id' and 'task_title' fields, and may optionally include a 'sub_tasks' array field. Task IDs must be unique across ALL rocks and weeks (e.g., TK001, TK002, TK003, etc.). There must be {num_weeks} milestones (one for each week). Do not include any array elements that are not objects. Do not include any extra or duplicate keys. Do not include any trailing commas. The output must be directly parseable by Python's json.loads().
+        IMPORTANT: Your response must be strictly valid JSON. Do not include any incomplete or malformed objects or arrays. Each milestone must be a JSON object with both 'week' and 'tasks' fields, where 'tasks' is an array of 3-4 task objects. Each task object must have a 'task_title' field, and may optionally include a 'sub_tasks' array field. Do NOT include a 'task_id' field. There must be {num_weeks} milestones (one for each week). Do not include any array elements that are not objects. Do not include any extra or duplicate keys. Do not include any trailing commas. The output must be directly parseable by Python's json.loads().
         """
         
         # Retry loop for JSON generation
@@ -781,7 +776,7 @@ EXTRACTED INFORMATION:
                                 validation_result["valid"] = False
                             else:
                                 for k, task in enumerate(tasks):
-                                    if not isinstance(task, dict) or "task_id" not in task or "task_title" not in task:
+                                    if not isinstance(task, dict) or "task_title" not in task:
                                         validation_result["issues"].append(f"Rock {i+1}, week {j+1}, task {k+1} has invalid structure")
                                         validation_result["valid"] = False
         

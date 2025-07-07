@@ -17,10 +17,26 @@ load_dotenv()
 
 router = APIRouter()
 
+from fastapi import Form
+
 @router.post("/upload-audio")
 async def upload_audio(
     file: UploadFile = File(...),
     quarter_id: Optional[str] = None,
+    meetingTitle: Optional[str] = Form(None),
+    meetingDescription: Optional[str] = Form(None),
+    quarter: Optional[str] = Form(None),
+    quarterYear: Optional[str] = Form(None),
+    quarterWeeks: Optional[str] = Form(None),
+    status: Optional[str] = Form(None),
+    title: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    year: Optional[str] = Form(None),
+    participants: Optional[str] = Form(None),
+    id: Optional[str] = Form(None),
+    quarter_id_form: Optional[str] = Form(None),
+    created_at: Optional[str] = Form(None),
+    updated_at: Optional[str] = Form(None),
     current_user: User = Depends(admin_required)
 ):
     """
@@ -38,6 +54,26 @@ async def upload_audio(
     allowed_exts = [".mp3", ".wav", ".ogg", ".flac", ".m4a", ".webm"]
     if not file.filename or not any(file.filename.endswith(ext) for ext in allowed_exts):
         raise HTTPException(status_code=400, detail="Only audio files are allowed.")
+
+    # Print all received quarter details for debugging
+    print("--- Quarter Details Received with Audio Upload ---")
+    print({
+        'meetingTitle': meetingTitle,
+        'meetingDescription': meetingDescription,
+        'quarter': quarter,
+        'quarterYear': quarterYear,
+        'quarterWeeks': quarterWeeks,
+        'status': status,
+        'title': title,
+        'description': description,
+        'year': year,
+        'participants': participants,
+        'id': id,
+        'quarter_id': quarter_id_form,
+        'created_at': created_at,
+        'updated_at': updated_at,
+    })
+    print("--- End Quarter Details ---")
     
     # Save file to disk
     file_location = f"uploaded_audios/{file.filename}"

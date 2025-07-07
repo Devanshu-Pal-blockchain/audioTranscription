@@ -16,13 +16,13 @@ class DataParserService:
     
     def parse_pipeline_response(self, pipeline_response: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
-        Parse the pipeline final response into Rock and Task collections
+        Parse the pipeline final response into Rock and Task collections, generating unique UUIDs for each rock and task.
         
         Args:
             pipeline_response: The final response from the pipeline
             
         Returns:
-            Tuple of (rocks_array, tasks_array) formatted according to schema
+            Tuple of (rocks_array, tasks_array) formatted according to schema, with UUIDs
         """
         try:
             rocks_array = []
@@ -33,9 +33,11 @@ class DataParserService:
                 return [], []
             
             for rock in pipeline_response["rocks"]:
+                # Generate UUID for this rock
+                rock_uuid = str(uuid.uuid4())
                 # Parse Rock Collection
                 rock_data = {
-                    "rock_id": "",  # Empty as specified
+                    "rock_id": rock_uuid,  # Now filled with UUID
                     "rock_name": rock.get("rock_title", ""),
                     "smart_objective": rock.get("smart_objective", ""),
                     "quarter_id": "",  # Empty as specified
@@ -51,10 +53,12 @@ class DataParserService:
                         
                         if "tasks" in week_data:
                             for task in week_data["tasks"]:
+                                # Generate UUID for this task
+                                task_uuid = str(uuid.uuid4())
                                 task_data = {
-                                    "rock_id": "",  # Empty as specified
+                                    "rock_id": rock_uuid,  # Map to the parent rock's UUID
                                     "week": week_number,
-                                    "task_id": "",  # Empty as specified
+                                    "task_id": task_uuid,  # Now filled with UUID
                                     "task": task.get("task_title", ""),
                                     "sub_tasks": task.get("sub_tasks", []),
                                     "comments": {
@@ -64,7 +68,7 @@ class DataParserService:
                                 }
                                 tasks_array.append(task_data)
             
-            logger.info(f"Successfully parsed {len(rocks_array)} rocks and {len(tasks_array)} tasks")
+            logger.info(f"Successfully parsed {len(rocks_array)} rocks and {len(tasks_array)} tasks with UUIDs")
             return rocks_array, tasks_array
             
         except Exception as e:
