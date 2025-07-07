@@ -1,23 +1,64 @@
-"""
-Upload routes for audio files and CSV data
-"""
 
-from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
 import os
 import asyncio
+import tempfile
+import json
+from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, status, Form
+from fastapi.security import OAuth2PasswordBearer
 from typing import Optional
 from dotenv import load_dotenv
 from models.user import User
 from service.auth_service import admin_required
-from service.script_pipeline_service import run_pipeline_for_audio
-from jose import jwt, JWTError
-from service.user_service import UserService
-import logging
+from service.script_pipeline_service import run_pipeline_for_audio, PipelineService
+from service.data_parser_service import parse_pipeline_response_to_files
+from service.meeting_json_service import save_raw_context_json
 
 load_dotenv()
 
 router = APIRouter()
+
+# New endpoint: Upload transcript (raw context) JSON and start pipeline from transcript step
+@router.post("/upload-transcript")
+async def upload_transcript(
+    file: UploadFile = File(...),
+    current_user: User = Depends(admin_required)
+):
+    """
+    Upload a transcript (raw context) JSON file, save to DB, and start the script pipeline from transcript step.
+    """
+    # Save uploaded file to a temp location
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".json", dir="uploaded_audios") as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+
+    # Save to raw context collection
+    with open(tmp_path, "r", encoding="utf-8") as f:
+        class DummyFile:
+            def __init__(self, file):
+                self.file = file
+        save_raw_context_json(DummyFile(f), str(current_user.employee_id))
+
+    # Start pipeline from transcript step in background
+    async def process_transcript_background():
+        try:
+            # Load transcript JSON
+            with open(tmp_path, "r", encoding="utf-8") as f:
+                transcript_json = json.load(f)
+            # Start pipeline from transcript step (skip audio)
+            pipeline = PipelineService(str(current_user.employee_id))
+            result = await pipeline.run_pipeline_from_transcript(transcript_json, num_weeks=12)
+            print("Transcript pipeline completed!", result)
+        except Exception as e:
+            print(f"Transcript pipeline error: {e}")
+        finally:
+            try:
+                os.remove(tmp_path)
+            except:
+                pass
+
+    asyncio.create_task(process_transcript_background())
+
+    return {"message": f"Transcript file '{file.filename}' uploaded. Pipeline started in background."}
 
 from fastapi import Form
 
