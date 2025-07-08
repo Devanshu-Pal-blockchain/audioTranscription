@@ -420,17 +420,29 @@ class PipelineService:
             lines.append(f'{name},{role},{resp}')
         return "\n".join(lines)
 
-    async def combine_segments_and_generate_rocks(self, segment_analyses: List[Dict[str, Any]], num_weeks: int, participants: list, max_retries: int = 3) -> Dict[str, Any]:
-        """Step 4: Combine segment analyses and generate ROCKS in one step"""
+    # ==================== SCRIPT 4: ROCKS GENERATION ====================
+    def generate_weekly_tasks_structure(self, num_weeks: int) -> str:
+        """Generate the weekly_tasks structure dynamically (without task_id)"""
+        structure_parts = []
+        for week_num in range(1, num_weeks + 1):
+            week_structure = f'''                        {{"week": {week_num}, "tasks": [
+                            {{"task_title": "Task 1 description", "sub_tasks": []}},
+                            {{"task_title": "Task 2 description", "sub_tasks": ["Subtask 2.1", "Subtask 2.2"]}},
+                            {{"task_title": "Task 3 description", "sub_tasks": []}},
+                            {{"task_title": "Task 4 description", "sub_tasks": []}}
+                        ]}}'''
+            structure_parts.append(week_structure)
+        return f"[\n{',\n'.join(structure_parts)}\n                    ]"
+
+    async def generate_rocks(self, segment_analyses: List[Dict[str, Any]], num_weeks: int, participants: list, max_retries: int = 3) -> Dict[str, Any]:
+        """Generate ROCKS from a list of segment analyses (combines segments and generates rocks in one step)"""
         logger.info(f"Combining {len(segment_analyses)} segment analyses and generating ROCKS")
-        
         # Prepare segment analyses for LLM
         analyses_text = ""
         total_action_items = []
         all_people = set()
         all_dates = set()
         all_organizations = set()
-        
         for analysis in segment_analyses:
             analyses_text += f"""
 SEGMENT {analysis['segment_id'] + 1} ANALYSIS:
@@ -447,21 +459,24 @@ EXTRACTED INFORMATION:
             all_people.update(analysis.get('people', []))
             all_dates.update(analysis.get('dates', []))
             all_organizations.update(analysis.get('organizations', []))
-        
         # Generate roles CSV string from participants
         roles_csv = self.participants_to_csv(participants)
         roles_str = roles_csv
-        
         # Generate weekly_tasks structure dynamically
         weekly_tasks_structure = self.generate_weekly_tasks_structure(num_weeks)
-        
         # Create comprehensive ROCKS generation prompt
         prompt = f"""
+        # RIZEN Prompting Framework
+        
+        ## ROLE
+        You are an expert EOS (Entrepreneurial Operating System) facilitator and business analyst, skilled at extracting actionable quarterly rocks from meeting analyses.
+        
+        ## INPUT
         Based on these individual segment analyses, create a structured JSON response following the EOS (Entrepreneurial Operating System) format for quarterly rocks.
         
         MEETING CONTEXT:
         - Total segments analyzed: {len(segment_analyses)}
-        - People mentioned: {list(all_people)}
+        - People mentioned: {list(all_people)} 
         - Organizations: {list(all_organizations)}
         - Dates mentioned: {list(all_dates)}
         - Action items identified: {len(total_action_items)}
@@ -470,14 +485,15 @@ EXTRACTED INFORMATION:
         AVAILABLE ROLES AND EMPLOYEES (CSV):
         {roles_str}
         
-        INSTRUCTIONS:
+        ## ZERO-SHOT TASK
+        Analyze the provided segment analyses and synthesize 3-4 major quarterly rocks, each with SMART objectives and weekly milestones, using only the names and roles from the CSV above. Assign owners and break down each rock into weekly tasks.
+        
+        ## EXPLICIT CONSTRAINTS
         - ONLY use the names and designations (job roles) provided in the above CSV for assigning owners to rocks and tasks.
         - DO NOT invent or use any names or positions that are not present in the CSV.
-        - If a specific person is not mentioned, choose the most relevant employee from the provided list.
-        
-        REQUIREMENTS:
-        Create a JSON structure with the following format:
-        
+        - Do NOT invent, assume, or extrapolate any details (names, roles, organizations, objectives, etc.) that are not present in the input/context.
+        - Do not add any filler, repetition, or verbose explanations. Be concise and direct.
+        - Create a JSON structure with the following format:
         {{
             "session_summary": "Brief 2-4 sentence overview of the meeting and key outcomes",
             "rocks": [
@@ -494,43 +510,39 @@ EXTRACTED INFORMATION:
                 }}
             ]
         }}
+        - Extract 3-4 major rocks (strategic initiatives) from the segment analyses (MAXIMUM 4 ROCKS)
+        - Each rock should be a significant quarterly objective, not a small task
+        - SMART objectives should include specific metrics and deadlines
+        - Milestones should break down the rock into {num_weeks}
+        - For each week, provide 3-4 distinct tasks in the 'tasks' array (3 to 4 tasks per week)
+        - Each task object must have a 'task_title' field, and may optionally include a 'sub_tasks' array field. Do NOT include a 'task_id' field. Task IDs will be assigned later in the pipeline.
+        - If specific people aren't mentioned, use the most relevant employee and role from the above list. If no suitable match is found, use a generic role as before (e.g., "Project Manager").
+        - If detailed milestones aren't available, create logical weekly progression
+        - Set realistic timelines based on the project scope
+        - KEEP THE RESPONSE CONCISE - focus on the most important initiatives only
+        - AVOID UNNECESSARY CONTENT - give direct, concise descriptions without verbose explanations
+        - Your response must be strictly valid JSON. Do not include any incomplete or malformed objects or arrays. Each milestone must be a JSON object with both 'week' and 'tasks' fields, where 'tasks' is an array of 3-4 task objects. Each task object must have a 'task_title' field, and may optionally include a 'sub_tasks' array field. Do NOT include a 'task_id' field. There must be {num_weeks} milestones (one for each week). Do not include any array elements that are not objects. Do not include any extra or duplicate keys. Do not include any trailing commas. The output must be directly parseable by Python's json.loads().
         
-        GUIDELINES:
-        1. Extract 3-4 major rocks (strategic initiatives) from the segment analyses (MAXIMUM 4 ROCKS)
-        2. Each rock should be a significant quarterly objective, not a small task
-        3. SMART objectives should include specific metrics and deadlines
-        4. Milestones should break down the rock into {num_weeks}
-        5. For each week, provide 3-4 distinct tasks in the 'tasks' array (3 to 4 tasks per week)
-        6. Each task object must have a 'task_title' field, and may optionally include a 'sub_tasks' array field. Do NOT include a 'task_id' field. Task IDs will be assigned later in the pipeline.
-        7. If specific people aren't mentioned, use the most relevant employee and role from the above list. If no suitable match is found, use a generic role as before (e.g., "Project Manager").
-        8. If detailed milestones aren't available, create logical weekly progression
-        9. Set realistic timelines based on the project scope
-        10. KEEP THE RESPONSE CONCISE - focus on the most important initiatives only
-        11. AVOID UNNECESSARY CONTENT - give direct, concise descriptions without verbose explanations
-        
-        IMPORTANT: Your response must be strictly valid JSON. Do not include any incomplete or malformed objects or arrays. Each milestone must be a JSON object with both 'week' and 'tasks' fields, where 'tasks' is an array of 3-4 task objects. Each task object must have a 'task_title' field, and may optionally include a 'sub_tasks' array field. Do NOT include a 'task_id' field. There must be {num_weeks} milestones (one for each week). Do not include any array elements that are not objects. Do not include any extra or duplicate keys. Do not include any trailing commas. The output must be directly parseable by Python's json.loads().
+        ## NOTES
+        - Focus only on actionable business items. Ignore general discussion, small talk, or technical troubleshooting.
+        - Structure your response with clear sections and bullet points where appropriate.
+        - Double-check that your output is strictly valid JSON, with no trailing commas, comments, or extraneous text.
         """
-        
         # Retry loop for JSON generation
         for attempt in range(max_retries + 1):
             try:
                 logger.info(f"Generating ROCKS from segment analyses (attempt {attempt + 1}/{max_retries + 1})...")
-                
                 response = self.gemini_model.generate_content(prompt)
                 json_response = self._handle_large_response(response.text.strip())
-                
                 # Clean up response
                 json_response = re.sub(r"^```(?:json)?\s*", "", json_response)
                 json_response = re.sub(r"\s*```$", "", json_response)
                 json_response = re.sub(r',([ \t\r\n]*[\]}])', r'\1', json_response)
-                
                 logger.info("Raw JSON response received")
-                
                 # Parse and validate JSON - try standard json first, then demjson3 as fallback
                 rocks_data = None
                 json_error = None
                 demjson_error = None
-                
                 try:
                     rocks_data = json.loads(json_response)
                     logger.info("JSON parsed successfully with standard json module")
@@ -544,8 +556,6 @@ EXTRACTED INFORMATION:
                         demjson_error = de
                         logger.error(f"Both JSON parsing methods failed. Standard error: {e}, Demjson3 error: {de}")
                         logger.error(f"Raw response: {json_response}")
-                        
-                        # If this is not the last attempt, continue to retry
                         if attempt < max_retries:
                             logger.warning(f"Invalid JSON generated on attempt {attempt + 1}. Retrying...")
                             continue
@@ -557,7 +567,6 @@ EXTRACTED INFORMATION:
                                 "demjson3_error": str(demjson_error),
                                 "attempts_made": max_retries + 1
                             }
-                
                 # If we get here, JSON parsing was successful
                 # Add compliance log
                 rocks_data["compliance_log"] = {
@@ -568,10 +577,8 @@ EXTRACTED INFORMATION:
                     "processing_pipeline_version": "1.0",
                     "generation_attempts": attempt + 1
                 }
-                
                 logger.info(f"ROCKS generated successfully from segment analyses on attempt {attempt + 1}")
                 return rocks_data
-                
             except Exception as e:
                 logger.error(f"Error generating ROCKS from segment analyses on attempt {attempt + 1}: {e}")
                 if attempt < max_retries:
@@ -580,145 +587,6 @@ EXTRACTED INFORMATION:
                 else:
                     return {"error": str(e), "attempts_made": max_retries + 1}
 
-    # ==================== SCRIPT 4: ROCKS GENERATION ====================
-    def generate_weekly_tasks_structure(self, num_weeks: int) -> str:
-        """Generate the weekly_tasks structure dynamically (without task_id)"""
-        structure_parts = []
-        for week_num in range(1, num_weeks + 1):
-            week_structure = f'''                        {{"week": {week_num}, "tasks": [
-                            {{"task_title": "Task 1 description", "sub_tasks": []}},
-                            {{"task_title": "Task 2 description", "sub_tasks": ["Subtask 2.1", "Subtask 2.2"]}},
-                            {{"task_title": "Task 3 description", "sub_tasks": []}},
-                            {{"task_title": "Task 4 description", "sub_tasks": []}}
-                        ]}}'''
-            structure_parts.append(week_structure)
-        return f"[\n{',\n'.join(structure_parts)}\n                    ]"
-
-    async def generate_rocks(self, analysis_result: Dict[str, Any], num_weeks: int, max_retries: int = 3) -> Dict[str, Any]:
-        """Script 4: ROCKS generation using Gemini with retry mechanism"""
-        
-        analysis_text = analysis_result.get('analysis', '')
-        input_summary = analysis_result.get('input_summary', {})
-        
-        # Generate weekly_tasks structure dynamically
-        weekly_tasks_structure = self.generate_weekly_tasks_structure(num_weeks)
-        
-        prompt = f"""
-        Based on the following comprehensive meeting analysis, create a structured JSON response following the EOS (Entrepreneurial Operating System) format for quarterly rocks.
-        
-        MEETING ANALYSIS:
-        {analysis_text}
-        
-        CONTEXT:
-        - Total segments processed: {input_summary.get('total_segments', 0)}
-        - Action items identified: {input_summary.get('action_items_count', 0)}
-        - People involved: {input_summary.get('people_mentioned', 0)}
-        - Number of weeks: {num_weeks}
-        
-        REQUIREMENTS:
-        Create a JSON structure with the following format:
-        
-        {{
-            "session_summary": "Brief 2-4 sentence overview of the meeting and key outcomes",
-            "rocks": [
-                {{
-                    "rock_title": "Clear, actionable title for the major initiative",
-                    "owner": "Full Name (Job Title)" - extract from analysis or from the above list,
-                    "smart_objective": "Specific, Measurable, Achievable, Relevant, Time-bound objective with clear success criteria",
-                    "weekly_tasks": {weekly_tasks_structure},
-                    "review": {{
-                        "status": "Approved" or "Pending",
-                        "comments": "Any relevant comments or notes"
-                    }}
-                }}
-            ]
-        }}
-        
-        GUIDELINES:
-        1. Extract 3-4 major rocks (strategic initiatives) from the analysis
-        2. Each rock should be a significant quarterly objective, not a small task
-        3. SMART objectives should include specific metrics and deadlines
-        4. Milestones should break down the rock into {num_weeks} weekly actionable tasks (one milestone per week)
-        5. For each week, provide 3-4 distinct tasks in the 'tasks' array (3 to 4 tasks per week)
-        6. Each task object must have a 'task_title' field, and may optionally include a 'sub_tasks' array field. Do NOT include a 'task_id' field. Task IDs will be assigned later in the pipeline.
-        7. If specific people aren't mentioned, use the most relevant employee and role from the above list. If no suitable match is found, use a generic role as before (e.g., "Project Manager").
-        8. If detailed milestones aren't available, create logical weekly progression
-        9. Set realistic timelines based on the project scope
-        10. KEEP THE RESPONSE CONCISE - focus on the most important initiatives only
-        11. AVOID UNNECESSARY CONTENT - give direct, concise descriptions without verbose explanations
-        
-        IMPORTANT: Your response must be strictly valid JSON. Do not include any incomplete or malformed objects or arrays. Each milestone must be a JSON object with both 'week' and 'tasks' fields, where 'tasks' is an array of 3-4 task objects. Each task object must have a 'task_title' field, and may optionally include a 'sub_tasks' array field. Do NOT include a 'task_id' field. There must be {num_weeks} milestones (one for each week). Do not include any array elements that are not objects. Do not include any extra or duplicate keys. Do not include any trailing commas. The output must be directly parseable by Python's json.loads().
-        """
-        
-        # Retry loop for JSON generation
-        for attempt in range(max_retries + 1):
-            try:
-                logger.info(f"Generating ROCKS JSON structure (attempt {attempt + 1}/{max_retries + 1})...")
-                
-                response = self.gemini_model.generate_content(prompt)
-                json_response = self._handle_large_response(response.text.strip())
-                
-                # Clean up response
-                json_response = re.sub(r"^```(?:json)?\s*", "", json_response)
-                json_response = re.sub(r"\s*```$", "", json_response)
-                json_response = re.sub(r',([ \t\r\n]*[\]}])', r'\1', json_response)
-                
-                logger.info("Raw JSON response received")
-                
-                # Parse and validate JSON - try standard json first, then demjson3 as fallback
-                rocks_data = None
-                json_error = None
-                demjson_error = None
-                
-                try:
-                    rocks_data = json.loads(json_response)
-                    logger.info("JSON parsed successfully with standard json module")
-                except json.JSONDecodeError as e:
-                    json_error = e
-                    logger.warning(f"Standard JSON parsing failed, trying demjson3: {e}")
-                    try:
-                        rocks_data = demjson3.decode(json_response)
-                        logger.info("JSON parsed successfully with demjson3")
-                    except Exception as de:
-                        demjson_error = de
-                        logger.error(f"Both JSON parsing methods failed. Standard error: {e}, Demjson3 error: {de}")
-                        logger.error(f"Raw response: {json_response}")
-                        
-                        # If this is not the last attempt, continue to retry
-                        if attempt < max_retries:
-                            logger.warning(f"Invalid JSON generated on attempt {attempt + 1}. Retrying...")
-                            continue
-                        else:
-                            return {
-                                "error": "Invalid JSON format generated after all retry attempts",
-                                "raw_response": json_response,
-                                "standard_json_error": str(json_error),
-                                "demjson3_error": str(demjson_error),
-                                "attempts_made": max_retries + 1
-                            }
-                
-                # If we get here, JSON parsing was successful
-                # Add compliance log
-                rocks_data["compliance_log"] = {
-                    "transcription_tool": "Python Speech Recognition",
-                    "genai_model": f"Gemini {self.gemini_model.model_name}",
-                    "facilitator_review_timestamp": datetime.now().isoformat(),
-                    "data_storage_platform": "Local Processing",
-                    "processing_pipeline_version": "1.0",
-                    "generation_attempts": attempt + 1
-                }
-                
-                logger.info(f"ROCKS JSON generated and validated successfully on attempt {attempt + 1}")
-                return rocks_data
-                
-            except Exception as e:
-                logger.error(f"Error generating ROCKS on attempt {attempt + 1}: {e}")
-                if attempt < max_retries:
-                    logger.warning(f"Retrying ROCKS generation...")
-                    continue
-                else:
-                    return {"error": str(e), "attempts_made": max_retries + 1}
-    
     def validate_rocks_structure(self, rocks_data: Dict[str, Any], num_weeks: int) -> Dict[str, Any]:
         """Validate the generated ROCKS structure"""
         validation_result = {
@@ -802,8 +670,8 @@ EXTRACTED INFORMATION:
             segment_analyses = await self.parallel_segment_analysis(semantic_data)
             log_step_completion("Step 3: Parallel Segment Analysis")
             
-            # Step 4: Combine Segments and Generate ROCKS
-            rocks_data = await self.combine_segments_and_generate_rocks(segment_analyses, num_weeks, participants)
+            # Step 4: Generate ROCKS
+            rocks_data = await self.generate_rocks(segment_analyses, num_weeks, participants)
             
             # Check if ROCKS generation failed
             if "error" in rocks_data:
@@ -863,8 +731,8 @@ EXTRACTED INFORMATION:
             segment_analyses = await self.parallel_segment_analysis(semantic_data)
             log_step_completion("Step 3: Parallel Segment Analysis")
 
-            # Step 4: Combine Segments and Generate ROCKS
-            rocks_data = await self.combine_segments_and_generate_rocks(segment_analyses, num_weeks, participants)
+            # Step 4: Generate ROCKS
+            rocks_data = await self.generate_rocks(segment_analyses, num_weeks, participants)
 
             # Check if ROCKS generation failed
             if "error" in rocks_data:
