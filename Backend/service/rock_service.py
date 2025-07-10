@@ -106,16 +106,24 @@ class RockService(BaseService):
         return await RockService.get_rock(rock_id)
 
     @staticmethod
-    async def update_smart_objective(rock_id: UUID, smart_objective: str) -> Optional[Rock]:
-        """Update a rock's SMART objective"""
+    async def update_completion_status(rock_id: UUID, status: str, percentage_completion: Optional[int] = None) -> Optional[Rock]:
+        """Update a rock's completion status and optionally percentage"""
+        update_data = {
+            "status": status,
+            "updated_at": datetime.utcnow()
+        }
+        
+        # Set percentage based on status if not provided
+        if percentage_completion is not None:
+            update_data["percentage_completion"] = percentage_completion
+        elif status == "completed":
+            update_data["percentage_completion"] = 100
+        elif status == "not_started":
+            update_data["percentage_completion"] = 0
+            
         result = await RockService.rocks.find_one_and_update(
             {"rock_id": str(rock_id)},
-            {
-                "$set": {
-                    "smart_objective": smart_objective,
-                    "updated_at": datetime.utcnow()
-                }
-            },
+            {"$set": update_data},
             return_document=True
         )
         return Rock(**result) if result else None
