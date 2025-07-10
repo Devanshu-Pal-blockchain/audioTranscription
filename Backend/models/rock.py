@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from uuid import UUID, uuid4
 from datetime import datetime
@@ -36,4 +36,45 @@ class Rock(BaseModel):
         kwargs["exclude_none"] = True
         data = super().model_dump(*args, **kwargs)
         data.pop("_id", None)
-        return data 
+        return data
+
+class PipelineRock(BaseModel):
+    rock_id: str
+    smart_rock: str
+    quarter_id: str
+    owner_id: str
+    owner_name: str
+    designation: str
+    linked_issues: List[str] = []
+
+class PipelineMilestone(BaseModel):
+    rock_id: str
+    week: int
+    milestone_id: str
+    milestone: str
+
+class PipelineTodo(BaseModel):
+    todo_id: str
+    to_do: str
+    owner: str
+    owner_id: str
+    designation: str
+    due_date: str
+    linked_issue: str
+
+class PipelineIssue(BaseModel):
+    issue_id: str
+    issue: str
+    owner: str
+    owner_id: str
+    linked_solution_type: str
+    linked_solution_ref: str
+
+class PipelineRuntimeSolution(BaseModel):
+    solution_id: str
+    solution_title: str
+    description: str
+    owner: str
+    owner_id: str
+    designation: str
+    deadline: str 

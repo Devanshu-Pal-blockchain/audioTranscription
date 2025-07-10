@@ -355,7 +355,8 @@ class PipelineService:
            - Main subjects and themes in this segment
         
         2. ACTION ITEMS IDENTIFIED:
-           - Specific tasks, deliverables, or commitments mentioned
+        - Label each as one of: runtime_solution, todo (due <14 days), or potential_rock (longer-term initiative)
+        - Include who it is assigned to and any stated or implied deadline
         
         3. PEOPLE AND ROLES:
            - Who was mentioned and their involvement
@@ -469,10 +470,54 @@ EXTRACTED INFORMATION:
         # RIZEN Prompting Framework
         
         ## ROLE
-        You are an expert EOS (Entrepreneurial Operating System) facilitator and business analyst, skilled at extracting actionable quarterly rocks from meeting analyses.
-        
+        You are acting as a highly skilled **EOS (Entrepreneurial Operating System) Facilitator, Business Analyst, and Meeting Architect**.
+
+        Your responsibilities include:
+
+        1. **Issue Discovery & Structuring**:  
+        Carefully extract all problems or discussion bottlenecks that arise in the meeting and classify them as distinct, well-titled `issues`.
+
+        2. **Categorical Problem-Solving**:  
+        For each issue, identify whether it was:
+        - Solved **live in the meeting** (`runtime_solutions`)
+        - Assigned as a **short-term task** due within 14 days (`todos`)
+        - Scheduled for **strategic resolution** as a quarterly initiative (`rocks`)
+
+        3. **SMART Rock Creation**:  
+        Each `rock` must be a **strategic, quarterly goal** structured with a SMART objective:
+        - **S**pecific
+        - **M**easurable
+        - **A**chievable
+        - **R**elevant
+        - **T**ime-bound
+
+        Break each Rock down into weekly `milestones`, using a simplified format:
+        - Each milestone contains either:
+            - A single \"milestone\" (string)
+            - Or a \"milestones\" array (2–4 brief milestone strings)
+
+        4. **Summary Authoring**:  
+        Write a clear, layered `session_summary` consisting of:
+        - `meeting_overview`: what was discussed generally
+        - `issues_summary`: a thematic overview of all raised issues
+        - `todos_summary`: a synthesis of short-term follow-up items
+        - `rocks_summary`: a strategic wrap-up of longer-term initiatives
+
+        5. **Accuracy & Alignment**:
+        - Use **only names and roles** from the provided participants CSV
+        - Do **not fabricate** any roles, objectives, companies, or filler text
+        - Stay **concise, structured, and strictly JSON-compliant**
+
+        ## ZERO-SHOT TASK
+        Classify issues, generate solutions across the three types, and break down rocks into milestones over {num_weeks} weeks. Maintain strict EOS structure and clarity.
+                
         ## INPUT
-        Based on these individual segment analyses, create a structured JSON response following the EOS (Entrepreneurial Operating System) format for quarterly rocks.
+        Based on the following segment analyses, synthesize a structured JSON response that includes:
+        - A layered session summary
+        - Issues raised
+        - Runtime solutions (solved in the meeting)
+        - To-Dos (must be completed within 14 days)
+        - SMART Rocks (quarter-long strategic initiatives)
         
         MEETING CONTEXT:
         - Total segments analyzed: {len(segment_analyses)}
@@ -485,9 +530,6 @@ EXTRACTED INFORMATION:
         AVAILABLE ROLES AND EMPLOYEES (CSV):
         {roles_str}
         
-        ## ZERO-SHOT TASK
-        Analyze the provided segment analyses and synthesize 3-4 major quarterly rocks, each with SMART objectives and weekly milestones, using only the names and roles from the CSV above. Assign owners and break down each rock into weekly tasks.
-        
         ## EXPLICIT CONSTRAINTS
         - ONLY use the names and designations (job roles) provided in the above CSV for assigning owners to rocks and tasks.
         - DO NOT invent or use any names or positions that are not present in the CSV.
@@ -495,33 +537,84 @@ EXTRACTED INFORMATION:
         - Do not add any filler, repetition, or verbose explanations. Be concise and direct.
         - Create a JSON structure with the following format:
         {{
-            "session_summary": "Brief 2-4 sentence overview of the meeting and key outcomes",
+            "session_summary": {{
+                "meeting_overview": "High-level overview of the meeting",
+                "issues_summary": "Summary of raised problems",
+                "todos_summary": "Summary of tasks to be completed within 14 days",
+                "rocks_summary": "Summary of strategic quarterly goals"
+            }},
+            "issues": [
+                {{
+                    "issue_title": "Concise title",
+                    "description": "Brief summary of the issue",
+                    "raised_by": "Full Name",
+                    "discussion_notes": "Key discussion points",
+                    "linked_solution_type": "rock | todo | runtime_solution",
+                    "linked_solution_ref": "Title of the related solution"
+                }}
+            ],
+            "runtime_solutions": [
+                {{
+                    "solution_title": "Action taken and resolved during meeting",
+                    "description": "How it was resolved",
+                    "assigned_to": "Full Name",
+                    "designation": "Job Title",
+                    "deadline": "YYYY-MM-DD"
+                }}
+            ],
+            "todos": [
+                {{
+                    "task_title": "Short-term action item",
+                    "assigned_to": "Full Name",
+                    "designation": "Job Title",
+                    "due_date": "YYYY-MM-DD",
+                    "linked_issue": "Title of related issue"
+                }}
+            ],
             "rocks": [
                 {{
-                    "rock_title": "Clear, actionable title for the major initiative",
-                    "owner": "Full Name" - extract from analysis or from the above list,
-                    "designation":"Job Title" - extract from analysis or from the above list,
-                    "smart_objective": "Specific, Measurable, Achievable, Relevant, Time-bound objective with clear success criteria",
-                    "weekly_tasks": {weekly_tasks_structure},
-                    "review": {{
-                        "status": "Approved" or "Pending",
-                        "comments": "Any relevant comments or notes"
-                    }}
+                    "rock_owner": "Full Name",
+                    "designation": "Job Title",
+                    "smart_rock": "Specific, Measurable, Achievable, Relevant, Time-bound",
+                    "milestones": [
+                        {{
+                            "week": 1,
+                            "milestones": [
+                                "Milestone 1 description",
+                                "Milestone 2 description"
+                            ]
+                        }},
+                        {{
+                            "week": 2,
+                            "milestone": "Single milestone for this week"
+                        }}
+                    ],
+                    "linked_issues": [
+                        "Title of related issue 1",
+                        "Title of related issue 2"
+                    ]
                 }}
-            ]
+            ],
+            "compliance_log": {{
+                "transcription_tool": "Python Speech Recognition",
+                "genai_model": "Gemini {self.gemini_model.model_name}",
+                "facilitator_review_timestamp": "{{datetime.now().isoformat()}}",
+                "data_storage_platform": "Local Processing",
+                "processing_pipeline_version": "1.0",
+                "generation_attempts": "<GEN_ATTEMPTS>"
+            }}
         }}
-        - Extract 3-4 major rocks (strategic initiatives) from the segment analyses (MAXIMUM 4 ROCKS)
-        - Each rock should be a significant quarterly objective, not a small task
-        - SMART objectives should include specific metrics and deadlines
-        - Milestones should break down the rock into {num_weeks}
-        - For each week, provide 3-4 distinct tasks in the 'tasks' array (3 to 4 tasks per week)
-        - Each task object must have a 'task_title' field, and may optionally include a 'sub_tasks' array field. Do NOT include a 'task_id' field. Task IDs will be assigned later in the pipeline.
+        - Extract all relevant issues, todos, runtime solutions, and rocks from the segment analyses.
+        - Each rock should be a significant quarterly objective, not a small task.
+        - SMART objectives should include specific metrics and deadlines.
+        - Milestones should break down the rock into weekly or logical progression.
+        - For each week, provide distinct milestones in the 'milestones' array.
         - If specific people aren't mentioned, use the most relevant employee and role from the above list. If no suitable match is found, use a generic role as before (e.g., "Project Manager").
-        - If detailed milestones aren't available, create logical weekly progression
-        - Set realistic timelines based on the project scope
-        - KEEP THE RESPONSE CONCISE - focus on the most important initiatives only
-        - AVOID UNNECESSARY CONTENT - give direct, concise descriptions without verbose explanations
-        - Your response must be strictly valid JSON. Do not include any incomplete or malformed objects or arrays. Each milestone must be a JSON object with both 'week' and 'tasks' fields, where 'tasks' is an array of 3-4 task objects. Each task object must have a 'task_title' field, and may optionally include a 'sub_tasks' array field. Do NOT include a 'task_id' field. There must be {num_weeks} milestones (one for each week). Do not include any array elements that are not objects. Do not include any extra or duplicate keys. Do not include any trailing commas. The output must be directly parseable by Python's json.loads().
+        - If detailed milestones aren't available, create logical weekly progression.
+        - Set realistic timelines based on the project scope.
+        - KEEP THE RESPONSE CONCISE - focus on the most important initiatives only.
+        - AVOID UNNECESSARY CONTENT - give direct, concise descriptions without verbose explanations.
+        - Your response must be strictly valid JSON. Do not include any incomplete or malformed objects or arrays. Do not include any extra or duplicate keys. Do not include any trailing commas. The output must be directly parseable by Python's json.loads().
         
         ## NOTES
         - Focus only on actionable business items. Ignore general discussion, small talk, or technical troubleshooting.
@@ -577,6 +670,10 @@ EXTRACTED INFORMATION:
                     "processing_pipeline_version": "1.0",
                     "generation_attempts": attempt + 1
                 }
+                # After parsing the model's JSON response, replace the placeholder with the actual attempt count
+                if "compliance_log" in rocks_data and isinstance(rocks_data["compliance_log"], dict):
+                    if rocks_data["compliance_log"].get("generation_attempts") == "<GEN_ATTEMPTS>":
+                        rocks_data["compliance_log"]["generation_attempts"] = attempt + 1
                 logger.info(f"ROCKS generated successfully from segment analyses on attempt {attempt + 1}")
                 return rocks_data
             except Exception as e:
@@ -588,18 +685,16 @@ EXTRACTED INFORMATION:
                     return {"error": str(e), "attempts_made": max_retries + 1}
 
     def validate_rocks_structure(self, rocks_data: Dict[str, Any], num_weeks: int) -> Dict[str, Any]:
-        """Validate the generated ROCKS structure"""
+        """Validate the generated ROCKS structure (new format)"""
         validation_result = {
             "valid": True,
             "issues": [],
             "suggestions": []
         }
-        
         # Check required fields
         if "session_summary" not in rocks_data:
             validation_result["issues"].append("Missing session_summary")
             validation_result["valid"] = False
-        
         if "rocks" not in rocks_data:
             validation_result["issues"].append("Missing rocks array")
             validation_result["valid"] = False
@@ -608,43 +703,32 @@ EXTRACTED INFORMATION:
             if not isinstance(rocks, list):
                 validation_result["issues"].append("rocks should be an array")
                 validation_result["valid"] = False
-            
-            # Validate each rock
             for i, rock in enumerate(rocks):
-                required_fields = ["rock_title", "owner", "smart_objective", "weekly_tasks", "review"]
+                required_fields = ["rock_owner", "designation", "smart_rock", "milestones", "linked_issues"]
                 for field in required_fields:
                     if field not in rock:
                         validation_result["issues"].append(f"Rock {i+1} missing {field}")
                         validation_result["valid"] = False
-                
-                # Check number of weeks
-                if "weekly_tasks" in rock and isinstance(rock["weekly_tasks"], list):
-                    if len(rock["weekly_tasks"]) != num_weeks:
-                        validation_result["issues"].append(f"Rock {i+1} has {len(rock['weekly_tasks'])} weeks, expected {num_weeks}")
-                        validation_result["valid"] = False
-                
-                # Check weekly_tasks structure
-                if "weekly_tasks" in rock and isinstance(rock["weekly_tasks"], list):
-                    for j, week in enumerate(rock["weekly_tasks"]):
-                        if not isinstance(week, dict) or "week" not in week or "tasks" not in week:
-                            validation_result["issues"].append(f"Rock {i+1}, week {j+1} has invalid structure")
+                # Check milestones structure
+                if "milestones" in rock and isinstance(rock["milestones"], list):
+                    for j, milestone in enumerate(rock["milestones"]):
+                        if not isinstance(milestone, dict) or "week" not in milestone:
+                            validation_result["issues"].append(f"Rock {i+1}, milestone {j+1} missing 'week' or is not a dict")
                             validation_result["valid"] = False
-                        else:
-                            # Check tasks structure
-                            tasks = week["tasks"]
-                            if not isinstance(tasks, list):
-                                validation_result["issues"].append(f"Rock {i+1}, week {j+1} tasks is not an array")
+                        # Must have either 'milestones' (list) or 'milestone' (string)
+                        if "milestones" in milestone:
+                            if not isinstance(milestone["milestones"], list):
+                                validation_result["issues"].append(f"Rock {i+1}, milestone {j+1} 'milestones' is not a list")
                                 validation_result["valid"] = False
-                            else:
-                                for k, task in enumerate(tasks):
-                                    if not isinstance(task, dict) or "task_title" not in task:
-                                        validation_result["issues"].append(f"Rock {i+1}, week {j+1}, task {k+1} has invalid structure")
-                                        validation_result["valid"] = False
-        
-        # Generate suggestions
+                        elif "milestone" in milestone:
+                            if not isinstance(milestone["milestone"], str):
+                                validation_result["issues"].append(f"Rock {i+1}, milestone {j+1} 'milestone' is not a string")
+                                validation_result["valid"] = False
+                        else:
+                            validation_result["issues"].append(f"Rock {i+1}, milestone {j+1} missing 'milestones' or 'milestone'")
+                            validation_result["valid"] = False
         if validation_result["valid"]:
             validation_result["suggestions"].append("Structure looks good! Consider reviewing deadlines and resource allocation.")
-        
         return validation_result
 
     # ==================== MAIN PIPELINE FUNCTION ====================
@@ -691,13 +775,16 @@ EXTRACTED INFORMATION:
             final_response = rocks_data
             
             # Save final response
-            final_file = "final_response.json"
+            import os
+            output_dir = "output"
+            os.makedirs(output_dir, exist_ok=True)
+            final_file = os.path.join(output_dir, "final_response.json")
             with open(final_file, "w", encoding="utf-8") as f:
                 json.dump(final_response, f, indent=2, ensure_ascii=False)
             
             # Parse final response into Rock and Task collections, always passing quarter_id and participants
             log_step_completion("Step 5: Data Parsing")
-            rocks_file, tasks_file = await parse_pipeline_response_to_files(final_response, file_prefix, quarter_id, participants)
+            rocks_file, tasks_file, todos_file, issues_file, runtime_solutions_file = await parse_pipeline_response_to_files(final_response, file_prefix, quarter_id, participants)
             
             if rocks_file and tasks_file:
                 logger.info(f"Parsed data saved to: {rocks_file} and {tasks_file}")
@@ -758,7 +845,7 @@ EXTRACTED INFORMATION:
 
             # Parse final response into Rock and Task collections, always passing quarter_id and participants
             log_step_completion("Step 5: Data Parsing")
-            rocks_file, tasks_file = await parse_pipeline_response_to_files(final_response, file_prefix, quarter_id, participants)
+            rocks_file, tasks_file, todos_file, issues_file, runtime_solutions_file = await parse_pipeline_response_to_files(final_response, file_prefix, quarter_id, participants)
 
             if rocks_file and tasks_file:
                 logger.info(f"Parsed data saved to: {rocks_file} and {tasks_file}")
