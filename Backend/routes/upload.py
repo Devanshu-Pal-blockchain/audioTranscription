@@ -161,7 +161,7 @@ async def upload_audio(
         Dict with upload status and pipeline information
     """
     # Validate file extension
-    allowed_exts = [".mp3", ".wav", ".ogg", ".flac", ".m4a", ".webm"]
+    allowed_exts = [".mp3", ".wav", ".ogg", ".flac", ".m4a", ".webm", ".mp4"]
     if not file.filename or not any(file.filename.endswith(ext) for ext in allowed_exts):
         raise HTTPException(status_code=400, detail="Only audio files are allowed.")
 

@@ -10,4 +10,6 @@ class BaseService:
     rocks = db.rocks
     tasks = db.tasks
     users = db.users
-    quarters = db.quarters 
+    quarters = db.quarters
+    todos = db.todos
+    issues = db.issues 
