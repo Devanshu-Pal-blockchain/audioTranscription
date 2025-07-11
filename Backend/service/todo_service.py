@@ -12,7 +12,7 @@ class TodoService(BaseService):
     async def create_todo(todo: Todo) -> Todo:
         """Create a new todo"""
         # Validate quarter exists
-        quarter_dict = await TodoService.quarters.find_one({"quarter_id": str(todo.quarter_id)})
+        quarter_dict = await TodoService.quarters.find_one({"id": str(todo.quarter_id)})
         if not quarter_dict:
             raise HTTPException(status_code=404, detail="Quarter not found")
         
@@ -31,11 +31,6 @@ class TodoService(BaseService):
     @staticmethod
     async def get_todos_by_quarter(quarter_id: UUID) -> List[Todo]:
         """Get all todos for a specific quarter"""
-        # Validate quarter exists
-        quarter_dict = await TodoService.quarters.find_one({"quarter_id": str(quarter_id)})
-        if not quarter_dict:
-            raise HTTPException(status_code=404, detail="Quarter not found")
-
         todos = []
         async for todo_dict in TodoService.todos.find({"quarter_id": str(quarter_id)}):
             todos.append(Todo(**todo_dict))

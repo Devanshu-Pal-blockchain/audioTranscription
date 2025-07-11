@@ -12,7 +12,7 @@ class IssueService(BaseService):
     async def create_issue(issue: Issue) -> Issue:
         """Create a new issue"""
         # Validate quarter exists
-        quarter_dict = await IssueService.quarters.find_one({"quarter_id": str(issue.quarter_id)})
+        quarter_dict = await IssueService.quarters.find_one({"id": str(issue.quarter_id)})
         if not quarter_dict:
             raise HTTPException(status_code=404, detail="Quarter not found")
         
@@ -31,11 +31,6 @@ class IssueService(BaseService):
     @staticmethod
     async def get_issues_by_quarter(quarter_id: UUID) -> List[Issue]:
         """Get all issues for a specific quarter"""
-        # Validate quarter exists
-        quarter_dict = await IssueService.quarters.find_one({"quarter_id": str(quarter_id)})
-        if not quarter_dict:
-            raise HTTPException(status_code=404, detail="Quarter not found")
-
         issues = []
         async for issue_dict in IssueService.issues.find({"quarter_id": str(quarter_id)}):
             issues.append(Issue(**issue_dict))

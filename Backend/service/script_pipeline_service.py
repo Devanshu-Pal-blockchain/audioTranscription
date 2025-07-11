@@ -13,6 +13,10 @@ from pydub import AudioSegment
 import re
 import csv
 import demjson3
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Import required libraries
 try:
@@ -54,7 +58,10 @@ class PipelineService:
     def _get_groq_client(self):
         """Initialize Groq client for transcription"""
         try:
-            return Groq()
+            api_key = os.getenv("GROQ_API_KEY")
+            if not api_key:
+                raise ValueError("GROQ_API_KEY environment variable not set")
+            return Groq(api_key=api_key)
         except Exception as e:
             logger.error(f"Failed to initialize Groq client: {e}")
             raise

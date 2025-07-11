@@ -7,6 +7,8 @@ from models.task import Task
 from service.quarter_service import QuarterService
 from service.rock_service import RockService
 from service.task_service import TaskService
+from service.todo_service import TodoService
+from service.issue_service import IssueService
 from service.auth_service import get_current_user, admin_required
 from models.user import User
 from pydantic import BaseModel, Field
@@ -221,14 +223,13 @@ async def get_user_quarters(
         )
     return await QuarterService.get_quarters_by_participant(user_id)
 
-# Combined Operations
 @router.get("/quarters/{quarter_id}/all", response_model=Dict)
 async def get_quarter_with_rocks_and_tasks(
     quarter_id: UUID,
     include_comments: bool = Query(False, description="Include task comments"),
     current_user: User = Depends(get_current_user)
 ) -> Dict:
-    """Get a quarter with all its rocks and tasks"""
+    """Get a quarter with all its rocks, tasks, todos, and issues"""
     # Verify quarter exists
     quarter = await QuarterService.get_quarter(quarter_id)
     if not quarter:
@@ -254,10 +255,32 @@ async def get_quarter_with_rocks_and_tasks(
         rocks_with_tasks.append(rock_dict)
         total_tasks += len(tasks)
     
+    # Get todos for the quarter
+    try:
+        todos = await TodoService.get_todos_by_quarter(quarter_id)
+        todos_list = [todo.model_dump() for todo in todos]
+        print(f"Found {len(todos_list)} todos for quarter {quarter_id}")
+    except Exception as e:
+        print(f"Error fetching todos for quarter {quarter_id}: {e}")
+        todos_list = []
+    
+    # Get issues for the quarter
+    try:
+        issues = await IssueService.get_issues_by_quarter(quarter_id)
+        issues_list = [issue.model_dump() for issue in issues]
+        print(f"Found {len(issues_list)} issues for quarter {quarter_id}")
+    except Exception as e:
+        print(f"Error fetching issues for quarter {quarter_id}: {e}")
+        issues_list = []
+    
     result = quarter.model_dump()
     result["rocks"] = rocks_with_tasks
+    result["todos"] = todos_list
+    result["issues"] = issues_list
     result["total_rocks"] = len(rocks_with_tasks)
     result["total_tasks"] = total_tasks
+    result["total_todos"] = len(todos_list)
+    result["total_issues"] = len(issues_list)
     return result
 
 @router.get("/quarters/{quarter_id}/week/{week}", response_model=Dict)

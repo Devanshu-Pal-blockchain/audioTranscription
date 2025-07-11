@@ -4,8 +4,8 @@ Data Parser Service - Parses pipeline final response into Rock and Task collecti
 
 import json
 import uuid
-from typing import Dict, Any, List, Tuple
-from datetime import datetime
+from typing import Dict, Any, List, Tuple, Optional
+import datetime as dt
 import logging
 import difflib
 from .db import db
@@ -19,7 +19,7 @@ class DataParserService:
     def __init__(self):
         pass
     
-    def parse_pipeline_response(self, pipeline_response: Dict[str, Any], quarter_id: str = "", participants: list = None) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    def parse_pipeline_response(self, pipeline_response: Dict[str, Any], quarter_id: str = "", participants: Optional[List] = None) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
         Parse the pipeline final response into Rock, Task, Todo, Issue, and Runtime Solution collections, generating unique UUIDs for each.
         Optionally inject quarter_id into each rock and map assigned_to_name to assigned_to_id using participants.
@@ -54,38 +54,52 @@ class DataParserService:
                         if close_matches:
                             owner_id = name_to_id.get(close_matches[0], "")
                 rock_data = {
+                    "id": rock_uuid,
                     "rock_id": rock_uuid,
-                    "smart_rock": rock.get("smart_rock", ""),
+                    "rock_name": rock.get("smart_rock", "").split(":")[0] if ":" in rock.get("smart_rock", "") else rock.get("smart_rock", ""),
+                    "smart_objective": rock.get("smart_rock", ""),
                     "quarter_id": quarter_id,
-                    "owner_id": owner_id,
-                    "owner_name": owner_name
+                    "assigned_to_id": owner_id,
+                    "assigned_to_name": owner_name,
+                    "created_at": dt.datetime.utcnow().isoformat(),
+                    "updated_at": dt.datetime.utcnow().isoformat()
                 }
                 rocks_array.append(rock_data)
                 # Parse Task Collection for this rock using 'milestones'
                 if "milestones" in rock:
                     for milestone in rock["milestones"]:
                         week_number = milestone.get("week", 0)
-                        # Only handle 'milestones' (list of strings)
+                        # Handle 'milestones' (list of strings)
                         if "milestones" in milestone and isinstance(milestone["milestones"], list):
                             for ms in milestone["milestones"]:
-                                milestone_uuid = str(uuid.uuid4())
-                                milestone_data = {
+                                task_uuid = str(uuid.uuid4())
+                                task_data = {
+                                    "id": task_uuid,
                                     "rock_id": rock_uuid,
                                     "week": week_number,
-                                    "milestone_id": milestone_uuid,
-                                    "milestone": ms if isinstance(ms, str) else str(ms)
+                                    "task_id": task_uuid,
+                                    "task": ms if isinstance(ms, str) else str(ms),
+                                    "sub_tasks": None,
+                                    "comments": [],
+                                    "created_at": dt.datetime.utcnow().isoformat(),
+                                    "updated_at": dt.datetime.utcnow().isoformat()
                                 }
-                                milestones_array.append(milestone_data)
-                        # Only handle 'milestone' (single string)
+                                milestones_array.append(task_data)
+                        # Handle 'milestone' (single string)
                         elif "milestone" in milestone and isinstance(milestone["milestone"], str):
-                            milestone_uuid = str(uuid.uuid4())
-                            milestone_data = {
+                            task_uuid = str(uuid.uuid4())
+                            task_data = {
+                                "id": task_uuid,
                                 "rock_id": rock_uuid,
                                 "week": week_number,
-                                "milestone_id": milestone_uuid,
-                                "milestone": milestone["milestone"]
+                                "task_id": task_uuid,
+                                "task": milestone["milestone"],
+                                "sub_tasks": None,
+                                "comments": [],
+                                "created_at": dt.datetime.utcnow().isoformat(),
+                                "updated_at": dt.datetime.utcnow().isoformat()
                             }
-                            milestones_array.append(milestone_data)
+                            milestones_array.append(task_data)
             
             # Parse todos
             if "todos" in pipeline_response:
@@ -115,6 +129,7 @@ class DataParserService:
                             pass
                     
                     todo_data = {
+                        "id": todo_uuid,
                         "todo_id": todo_uuid,
                         "task_title": todo.get("task_title", ""),
                         "assigned_to": assigned_to_name,
@@ -124,8 +139,8 @@ class DataParserService:
                         "status": "pending",
                         "quarter_id": quarter_id,
                         "assigned_to_id": assigned_to_id,
-                        "created_at": datetime.utcnow().isoformat(),
-                        "updated_at": datetime.utcnow().isoformat()
+                        "created_at": dt.datetime.utcnow().isoformat(),
+                        "updated_at": dt.datetime.utcnow().isoformat()
                     }
                     todos_array.append(todo_data)
             
@@ -144,6 +159,7 @@ class DataParserService:
                                 break
                     
                     issue_data = {
+                        "id": issue_uuid,
                         "issue_id": issue_uuid,
                         "issue_title": issue.get("issue_title", ""),
                         "description": issue.get("description", ""),
@@ -154,8 +170,8 @@ class DataParserService:
                         "status": "open",
                         "quarter_id": quarter_id,
                         "raised_by_id": raised_by_id,
-                        "created_at": datetime.utcnow().isoformat(),
-                        "updated_at": datetime.utcnow().isoformat()
+                        "created_at": dt.datetime.utcnow().isoformat(),
+                        "updated_at": dt.datetime.utcnow().isoformat()
                     }
                     issues_array.append(issue_data)
             
@@ -212,7 +228,7 @@ class DataParserService:
             logger.error(f"Error inserting data into database: {e}")
             raise
     
-    async def save_parsed_data(self, rocks_array: List[Dict[str, Any]], milestones_array: List[Dict[str, Any]], todos_array: List[Dict[str, Any]], issues_array: List[Dict[str, Any]], runtime_solutions_array: List[Dict[str, Any]], file_prefix: str = None) -> Tuple[str, str, str, str, str]:
+    async def save_parsed_data(self, rocks_array: List[Dict[str, Any]], milestones_array: List[Dict[str, Any]], todos_array: List[Dict[str, Any]], issues_array: List[Dict[str, Any]], runtime_solutions_array: List[Dict[str, Any]], file_prefix: Optional[str] = None) -> Tuple[str, str, str, str, str]:
         """
         Save the parsed arrays to separate JSON files and insert them into the database (rocks/tasks only for now)
         Returns:
@@ -248,11 +264,11 @@ class DataParserService:
             logger.error(f"Error saving parsed data: {e}")
             return "", "", "", "", ""
 
-    async def parse_and_save(self, pipeline_response: Dict[str, Any], file_prefix: str = None, quarter_id: str = "", participants: list = None) -> Tuple[str, str, str, str, str]:
+    async def parse_and_save(self, pipeline_response: Dict[str, Any], file_prefix: Optional[str] = None, quarter_id: str = "", participants: Optional[List] = None) -> Tuple[str, str, str, str, str]:
         rocks_array, milestones_array, todos_array, issues_array, runtime_solutions_array = self.parse_pipeline_response(pipeline_response, quarter_id, participants)
         return await self.save_parsed_data(rocks_array, milestones_array, todos_array, issues_array, runtime_solutions_array, file_prefix)
 
 # Convenience function for easy usage
-async def parse_pipeline_response_to_files(pipeline_response: Dict[str, Any], file_prefix: str = None, quarter_id: str = "", participants: list = None) -> Tuple[str, str, str, str, str]:
+async def parse_pipeline_response_to_files(pipeline_response: Dict[str, Any], file_prefix: Optional[str] = None, quarter_id: str = "", participants: Optional[List] = None) -> Tuple[str, str, str, str, str]:
     parser = DataParserService()
     return await parser.parse_and_save(pipeline_response, file_prefix, quarter_id, participants) 
