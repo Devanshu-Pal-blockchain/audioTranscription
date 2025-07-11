@@ -6,6 +6,7 @@ from typing import Optional, Dict, List
 from .db import db
 from uuid import uuid4
 from datetime import datetime
+from utils.secure_fields import encrypt_dict, decrypt_dict
 
 
 RAW_CONTEXT_COLLECTION = 'raw_contexts'
@@ -32,6 +33,20 @@ def ensure_context_id_and_index(doc, context_type, admin_id):
         }[context_type]].replace_one({'admin_id': admin_id}, {'admin_id': admin_id, 'context': doc['context'], 'context_id': doc['context_id'], 'context_index': doc['context_index']}, upsert=True)
     return doc
 
+# --- RAW CONTEXT ENCRYPTION ---
+EXCLUDE_FIELDS = ["admin_id"]
+EXCLUDE_TYPES = {"admin_id": str}
+
+def safe_decrypt_raw_context(doc):
+    if doc is None:
+        return None
+    if "data_enc" in doc:
+        # Decrypt and merge with admin_id
+        data = decrypt_dict(doc, EXCLUDE_FIELDS, EXCLUDE_TYPES)
+        return data["context"] if "context" in data else data
+    else:
+        return doc["context"] if "context" in doc else doc
+
 # Store raw context JSON in MongoDB
 def save_raw_context_json(file, admin_id):
     content = file.file.read()
@@ -44,14 +59,20 @@ def save_raw_context_json(file, admin_id):
         print("[ERROR] Failed to parse uploaded JSON:", e)
         raise
     print("[DEBUG] Uploaded raw context JSON:", json_data)
-    db[RAW_CONTEXT_COLLECTION].replace_one({'admin_id': admin_id}, {'admin_id': admin_id, 'context': json_data}, upsert=True)
+    # Encrypt all except admin_id
+    to_encrypt = {"context": json_data}
+    encrypted = encrypt_dict({**to_encrypt, "admin_id": admin_id}, EXCLUDE_FIELDS)
+    db[RAW_CONTEXT_COLLECTION].replace_one({'admin_id': admin_id}, encrypted, upsert=True)
     return json_data
 
 # Store structured context JSON in MongoDB
 def save_structured_context_json(file, admin_id):
     content = file.file.read()
     json_data = json.loads(content)
-    db[STRUCTURED_CONTEXT_COLLECTION].replace_one({'admin_id': admin_id}, {'admin_id': admin_id, 'context': json_data}, upsert=True)
+    # Encrypt all except admin_id
+    to_encrypt = {"context": json_data}
+    encrypted = encrypt_dict({**to_encrypt, "admin_id": admin_id}, ["admin_id"])
+    db[STRUCTURED_CONTEXT_COLLECTION].replace_one({'admin_id': admin_id}, encrypted, upsert=True)
     return json_data
 
 
@@ -65,7 +86,7 @@ def get_raw_context_json(admin_id, with_meta=False):
     doc = ensure_context_id_and_index(doc, 'raw', admin_id)
     if with_meta:
         return doc
-    return doc['context'] if doc else None
+    return safe_decrypt_raw_context(doc)
 
 # Retrieve structured context JSON for admin
 

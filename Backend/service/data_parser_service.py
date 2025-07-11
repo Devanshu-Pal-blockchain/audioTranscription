@@ -12,6 +12,7 @@ from .db import db
 import asyncio
 import re
 import os
+from utils.secure_fields import encrypt_dict
 
 logger = logging.getLogger(__name__)
 
@@ -188,11 +189,13 @@ class DataParserService:
     async def insert_to_db(self, rocks_array, milestones_array, todos_array, issues_array, runtime_solutions_array):
         """Insert parsed data into database collections"""
         try:
+            # Define fields to exclude from encryption
+            exclude_fields = ["id", "rock_id", "task_id", "todo_id", "issue_id", "assigned_to_id", "assigned_to_name", "raised_by_id", "raised_by", "created_at", "updated_at", "quarter_id", "status"]
             # Insert rocks
             if rocks_array:
-                await db.rocks.insert_many(rocks_array)
+                encrypted_rocks = [encrypt_dict(dict(rock), exclude_fields) for rock in rocks_array]
+                await db.rocks.insert_many(encrypted_rocks)
                 logger.info(f"Inserted {len(rocks_array)} rocks into database")
-                
                 # Ensure user assigned_rocks is in sync for each rock
                 from service.user_service import UserService
                 from uuid import UUID
@@ -204,26 +207,24 @@ class DataParserService:
                             await UserService.assign_rock(UUID(str(assigned_to_id)), UUID(str(rock_id)))
                         except Exception as e:
                             logger.error(f"Failed to sync assigned_rocks for user {assigned_to_id} and rock {rock_id}: {e}")
-            
             # Insert milestones (tasks)
             if milestones_array:
-                await db.tasks.insert_many(milestones_array)
+                encrypted_tasks = [encrypt_dict(dict(task), exclude_fields) for task in milestones_array]
+                await db.tasks.insert_many(encrypted_tasks)
                 logger.info(f"Inserted {len(milestones_array)} tasks into database")
-            
             # Insert todos
             if todos_array:
-                await db.todos.insert_many(todos_array)
+                encrypted_todos = [encrypt_dict(dict(todo), exclude_fields) for todo in todos_array]
+                await db.todos.insert_many(encrypted_todos)
                 logger.info(f"Inserted {len(todos_array)} todos into database")
-            
             # Insert issues
             if issues_array:
-                await db.issues.insert_many(issues_array)
+                encrypted_issues = [encrypt_dict(dict(issue), exclude_fields) for issue in issues_array]
+                await db.issues.insert_many(encrypted_issues)
                 logger.info(f"Inserted {len(issues_array)} issues into database")
-            
             # Note: runtime_solutions are not stored in database for now
             if runtime_solutions_array:
                 logger.info(f"Runtime solutions saved to file only: {len(runtime_solutions_array)} items")
-                
         except Exception as e:
             logger.error(f"Error inserting data into database: {e}")
             raise

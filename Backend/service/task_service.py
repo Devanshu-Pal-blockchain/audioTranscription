@@ -5,9 +5,28 @@ from models.task import Task, Comment
 from models.rock import Rock
 from .base_service import BaseService
 from datetime import datetime
+from utils.secure_fields import encrypt_dict, decrypt_dict, fill_required_fields
 
 class TaskService(BaseService):
-    """Service for managing tasks"""
+    EXCLUDE_FIELDS = ["id", "task_id", "rock_id", "created_at", "updated_at"]
+    EXCLUDE_TYPES = {
+        "id": UUID,
+        "task_id": UUID,
+        "rock_id": UUID,
+        "created_at": datetime,
+        "updated_at": datetime
+    }
+
+    @staticmethod
+    def safe_decrypt_dict(doc):
+        if not doc:
+            return {}
+        if "data_enc" in doc:
+            data = decrypt_dict(doc, TaskService.EXCLUDE_FIELDS, TaskService.EXCLUDE_TYPES)
+        else:
+            data = doc
+        data = fill_required_fields(data, "task")
+        return data
 
     @staticmethod
     async def create_task(task: Task) -> Task:
@@ -18,7 +37,8 @@ class TaskService(BaseService):
             raise HTTPException(status_code=404, detail="Rock not found")
         
         task_dict = task.model_dump()
-        await TaskService.tasks.insert_one(task_dict)
+        encrypted = encrypt_dict(task_dict.copy(), TaskService.EXCLUDE_FIELDS)
+        await TaskService.tasks.insert_one(encrypted)
         return task
 
     @staticmethod
@@ -27,7 +47,8 @@ class TaskService(BaseService):
         task_dict = await TaskService.tasks.find_one({"task_id": str(task_id)})
         if not task_dict:
             return None
-        return Task(**task_dict)
+        data = TaskService.safe_decrypt_dict(task_dict)
+        return Task(**data)
 
     @staticmethod
     async def get_tasks_by_rock(rock_id: UUID, include_comments: bool = True) -> List[Task]:
@@ -38,8 +59,9 @@ class TaskService(BaseService):
             raise HTTPException(status_code=404, detail="Rock not found")
 
         tasks = []
-        async for task_dict in TaskService.tasks.find({"rock_id": str(rock_id)}):
-            task = Task(**task_dict)
+        async for doc in TaskService.tasks.find({"rock_id": str(rock_id)}):
+            data = TaskService.safe_decrypt_dict(doc)
+            task = Task(**data)
             if not include_comments:
                 task.comments = []
             tasks.append(task)
@@ -54,11 +76,12 @@ class TaskService(BaseService):
             raise HTTPException(status_code=404, detail="Rock not found")
 
         tasks = []
-        async for task_dict in TaskService.tasks.find({
+        async for doc in TaskService.tasks.find({
             "rock_id": str(rock_id),
             "week": week
         }):
-            tasks.append(Task(**task_dict))
+            data = TaskService.safe_decrypt_dict(doc)
+            tasks.append(Task(**data))
         return tasks
 
     @staticmethod
@@ -72,7 +95,8 @@ class TaskService(BaseService):
         task.rock_id = rock_id
         task.week = week
         task_dict = task.model_dump()
-        await TaskService.tasks.insert_one(task_dict)
+        encrypted = encrypt_dict(task_dict.copy(), TaskService.EXCLUDE_FIELDS)
+        await TaskService.tasks.insert_one(encrypted)
         return task
 
     @staticmethod
@@ -91,10 +115,11 @@ class TaskService(BaseService):
         task_update.week = week
         update_data = task_update.model_dump(exclude={"id", "created_at"})
         update_data["updated_at"] = datetime.utcnow()
+        encrypted = encrypt_dict(update_data.copy(), TaskService.EXCLUDE_FIELDS)
         
         await TaskService.tasks.update_one(
             {"task_id": str(task_id)},
-            {"$set": update_data}
+            {"$set": encrypted}
         )
         return await TaskService.get_task(task_id)
 
@@ -123,10 +148,11 @@ class TaskService(BaseService):
 
         update_data = task_update.model_dump(exclude={"id", "created_at"})
         update_data["updated_at"] = datetime.utcnow()
+        encrypted = encrypt_dict(update_data.copy(), TaskService.EXCLUDE_FIELDS)
         
         await TaskService.tasks.update_one(
             {"task_id": str(task_id)},
-            {"$set": update_data}
+            {"$set": encrypted}
         )
         return await TaskService.get_task(task_id)
 
