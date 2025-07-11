@@ -21,7 +21,7 @@ load_dotenv()
 # Import required libraries
 try:
     from groq import Groq
-    import google.generativeai as genai
+    from openai import OpenAI
     import spacy
     import demjson3
     import asyncio
@@ -30,7 +30,7 @@ try:
     from .data_parser_service import parse_pipeline_response_to_files
 except ImportError as e:
     print(f"Missing required library: {e}")
-    print("Please install required packages: pip install groq google-generativeai spacy demjson3")
+    print("Please install required packages: pip install groq openai spacy demjson3")
     print("Also install spaCy model: python -m spacy download en_core_web_sm")
     raise
 
@@ -47,7 +47,7 @@ class PipelineService:
     def __init__(self, admin_id: str = "default_admin"):
         # Initialize API clients
         self.groq_client = self._get_groq_client()
-        self.gemini_model = self._get_gemini_model()
+        self.openai_client = self._get_openai_client()
         
         # Initialize spaCy for NLP processing
         self.nlp = self._get_spacy_model()
@@ -66,18 +66,17 @@ class PipelineService:
             logger.error(f"Failed to initialize Groq client: {e}")
             raise
     
-    def _get_gemini_model(self):
-        """Initialize Gemini model for ROCKS generation"""
+    def _get_openai_client(self):
+        """Initialize OpenAI client for ROCKS generation"""
         try:
-            api_key = os.getenv("GEMINI_API_KEY_SCRIPT")
+            api_key = os.getenv("OPENAI_API_KEY")
+            logger.info(f"Using OpenAI API key: {api_key}...")  # Log first 4 chars for debugging-
             if not api_key:
-                raise ValueError("GEMINI_API_KEY_SCRIPT environment variable not set")
+                raise ValueError("OPENAI_API_KEY environment variable not set")
             
-            genai.configure(api_key=api_key)
-            model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-            return genai.GenerativeModel(model_name)
+            return OpenAI(api_key=api_key)
         except Exception as e:
-            logger.error(f"Failed to initialize Gemini model: {e}")
+            logger.error(f"Failed to initialize OpenAI client: {e}")
             raise
     
     def _get_spacy_model(self):
@@ -229,7 +228,7 @@ class PipelineService:
                     "label": ent.label_,
                     "start": ent.start_char,
                     "end": ent.end_char,
-                    "description": spacy.explain(ent.label_)
+                    "description": ent.label_  # Use label directly since spacy.explain is not exported
                 }
                 segment_tokens["entities"].append(entity_info)
                 
@@ -382,10 +381,19 @@ class PipelineService:
         """
         
         try:
-            response = self.gemini_model.generate_content(prompt)
+            model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
+            response = self.openai_client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You are an expert business analyst extracting key information from meeting segments."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=2000
+            )
             return {
                 "segment_id": segment["segment_id"],
-                "analysis": response.text,
+                "analysis": response.choices[0].message.content,
                 "entities": segment["entities"],
                 "action_items": segment["action_items"],
                 "people": segment["people"],
@@ -604,7 +612,7 @@ EXTRACTED INFORMATION:
             ],
             "compliance_log": {{
                 "transcription_tool": "Python Speech Recognition",
-                "genai_model": "Gemini {self.gemini_model.model_name}",
+                "genai_model": "OpenAI {os.getenv('OPENAI_MODEL', 'gpt-4o')}",
                 "facilitator_review_timestamp": "{{datetime.now().isoformat()}}",
                 "data_storage_platform": "Local Processing",
                 "processing_pipeline_version": "1.0",
@@ -632,8 +640,18 @@ EXTRACTED INFORMATION:
         for attempt in range(max_retries + 1):
             try:
                 logger.info(f"Generating ROCKS from segment analyses (attempt {attempt + 1}/{max_retries + 1})...")
-                response = self.gemini_model.generate_content(prompt)
-                json_response = self._handle_large_response(response.text.strip())
+                model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
+                response = self.openai_client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": "You are an expert business analyst creating ROCKS (quarterly goals) from meeting analyses. Return only valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.3,
+                    max_tokens=4000
+                )
+                response_content = response.choices[0].message.content or ""
+                json_response = self._handle_large_response(response_content.strip())
                 # Clean up response
                 json_response = re.sub(r"^```(?:json)?\s*", "", json_response)
                 json_response = re.sub(r"\s*```$", "", json_response)
@@ -669,9 +687,10 @@ EXTRACTED INFORMATION:
                             }
                 # If we get here, JSON parsing was successful
                 # Add compliance log
+                model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
                 rocks_data["compliance_log"] = {
                     "transcription_tool": "Python Speech Recognition",
-                    "genai_model": f"Gemini {self.gemini_model.model_name}",
+                    "genai_model": f"OpenAI {model_name}",
                     "facilitator_review_timestamp": datetime.now().isoformat(),
                     "data_storage_platform": "Local Processing",
                     "processing_pipeline_version": "1.0",

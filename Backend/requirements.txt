@@ -12,10 +12,9 @@ pydub==0.25.1
 audioop-lts
 
 langchain-community
-langchain-google-genai
 langchain
 numpy
 spacy
-google-generativeai
+openai
 groq
 demjson3
