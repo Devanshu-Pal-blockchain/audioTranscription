@@ -49,11 +49,11 @@ def _deserialize_excluded(fields: Dict[str, Any], types: Dict[str, Any]) -> Dict
     for k, v in fields.items():
         typ = types.get(k)
         if typ == UUID:
-            result[k] = UUID(v)
+            result[k] = UUID(v) if not isinstance(v, UUID) else v
         elif typ == List[UUID]:
-            result[k] = [UUID(x) for x in v]
+            result[k] = [UUID(x) if not isinstance(x, UUID) else x for x in v]
         elif typ == datetime:
-            result[k] = datetime.fromisoformat(v)
+            result[k] = datetime.fromisoformat(v) if isinstance(v, str) else v
         else:
             result[k] = v
     return result
