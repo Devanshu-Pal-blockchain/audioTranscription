@@ -20,6 +20,102 @@ class DataParserService:
     def __init__(self):
         pass
     
+    def validate_and_map_participant(self, name: str, participants: Optional[List] = None) -> Tuple[Optional[str], str]:
+        """
+        Validate and map participant name to ID with comprehensive fallback strategies.
+        
+        Args:
+            name: The name to validate and map
+            participants: List of participant dictionaries
+            
+        Returns:
+            Tuple of (employee_id or None, validated_name)
+        """
+        if not name or not name.strip():
+            logger.warning("Empty or None name provided for participant mapping")
+            return None, ""
+            
+        if not participants:
+            logger.warning(f"No participants list provided - cannot map name '{name}' to ID")
+            return None, name.strip()
+            
+        name_key = name.strip().lower()
+        
+        # Create name-to-ID mapping
+        name_to_id = {}
+        name_list = []
+        valid_participants = []
+        
+        for p in participants:
+            employee_name = p.get("employee_name", "").strip()
+            employee_id = p.get("employee_id")
+            
+            if employee_name and employee_id:
+                name_to_id[employee_name.lower()] = str(employee_id)
+                name_list.append(employee_name.lower())
+                valid_participants.append(employee_name)
+        
+        logger.info(f"Available participants for matching: {valid_participants}")
+        
+        # Strategy 1: Exact match (case-insensitive)
+        if name_key in name_to_id:
+            logger.info(f"Exact match found for '{name}' -> ID: {name_to_id[name_key]}")
+            return name_to_id[name_key], name.strip()
+        
+        # Strategy 2: Fuzzy matching for close names
+        if name_list:
+            close_matches = difflib.get_close_matches(name_key, name_list, n=1, cutoff=0.8)
+            if close_matches:
+                matched_name = close_matches[0]
+                mapped_id = name_to_id[matched_name]
+                # Find original name for logging
+                original_name = next((p["employee_name"] for p in participants 
+                                    if p.get("employee_name", "").lower() == matched_name), matched_name)
+                logger.info(f"Fuzzy match found for '{name}' -> '{original_name}' (ID: {mapped_id})")
+                return mapped_id, original_name
+        
+        # Strategy 3: Partial name matching (first/last name)
+        for participant_name in name_list:
+            name_parts = name_key.split()
+            participant_parts = participant_name.split()
+            
+            # Check if any part of the provided name matches any part of participant name
+            if any(part in participant_parts for part in name_parts if len(part) > 2):
+                mapped_id = name_to_id[participant_name]
+                original_name = next((p["employee_name"] for p in participants 
+                                    if p.get("employee_name", "").lower() == participant_name), participant_name)
+                logger.info(f"Partial match found for '{name}' -> '{original_name}' (ID: {mapped_id})")
+                return mapped_id, original_name
+        
+        # No match found
+        logger.warning(f"No matching participant found for name '{name}' in available participants: {valid_participants}")
+        return None, name.strip()
+    
+    def assign_rock_with_validation(self, rock_data: Dict[str, Any], owner_name: str, participants: Optional[List] = None) -> Dict[str, Any]:
+        """
+        Assign rock with proper validation, ensuring only valid participants get rocks assigned.
+        """
+        if not owner_name or not owner_name.strip():
+            logger.info("Rock has no owner specified - creating unassigned rock")
+            rock_data["assigned_to_id"] = None
+            rock_data["assigned_to_name"] = ""
+            return rock_data
+        
+        owner_id, validated_name = self.validate_and_map_participant(owner_name, participants)
+        
+        if owner_id:
+            # Valid participant found
+            rock_data["assigned_to_id"] = owner_id
+            rock_data["assigned_to_name"] = validated_name
+            logger.info(f"Rock '{rock_data.get('rock_name', 'Unknown')}' assigned to {validated_name} (ID: {owner_id})")
+        else:
+            # No valid participant found - create unassigned rock
+            logger.warning(f"Rock '{rock_data.get('rock_name', 'Unknown')}' cannot be assigned to '{owner_name}' - creating as unassigned")
+            rock_data["assigned_to_id"] = None
+            rock_data["assigned_to_name"] = f"UNASSIGNED: {owner_name}"
+        
+        return rock_data
+    
     def parse_pipeline_response(self, pipeline_response: Dict[str, Any], quarter_id: str = "", participants: Optional[List] = None) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
         Parse the pipeline final response into Rock, Task, Todo, Issue, and Runtime Solution collections, generating unique UUIDs for each.
@@ -33,11 +129,6 @@ class DataParserService:
             todos_array = []
             issues_array = []
             runtime_solutions_array = []
-            name_to_id = {}
-            name_list = []
-            if participants:
-                name_to_id = {p["employee_name"].strip().lower(): p["employee_id"] for p in participants if p.get("employee_name") and p.get("employee_id")}
-                name_list = [p["employee_name"].strip().lower() for p in participants if p.get("employee_name")]
 
             if "rocks" not in pipeline_response:
                 logger.error("No 'rocks' field found in pipeline response")
@@ -45,28 +136,32 @@ class DataParserService:
 
             for rock in pipeline_response["rocks"]:
                 rock_uuid = str(uuid.uuid4())
-                owner_name = rock.get("rock_owner", "")
-                owner_id = ""
-                if owner_name:
-                    key = owner_name.strip().lower()
-                    owner_id = name_to_id.get(key, "")
-                    if not owner_id and name_list:
-                        close_matches = difflib.get_close_matches(key, name_list, n=1, cutoff=0.7)
-                        if close_matches:
-                            owner_id = name_to_id.get(close_matches[0], "")
+                # Support both old format (rock_owner) and new format (owner)
+                owner_name = rock.get("rock_owner", "") or rock.get("owner", "")
+                
+                # Support both old format (smart_rock) and new format (rock_title + smart_objective)
+                rock_name = rock.get("smart_rock", "") or rock.get("rock_title", "")
+                smart_objective = rock.get("smart_rock", "") or rock.get("smart_objective", "")
+                
+                # Clean up rock name if it has a colon separator
+                if ":" in rock_name:
+                    rock_name = rock_name.split(":")[0]
+                
                 rock_data = {
                     "id": rock_uuid,
                     "rock_id": rock_uuid,
-                    "rock_name": rock.get("smart_rock", "").split(":")[0] if ":" in rock.get("smart_rock", "") else rock.get("smart_rock", ""),
-                    "smart_objective": rock.get("smart_rock", ""),
+                    "rock_name": rock_name,
+                    "smart_objective": smart_objective,
                     "quarter_id": quarter_id,
-                    "assigned_to_id": owner_id,
-                    "assigned_to_name": owner_name,
                     "created_at": dt.datetime.utcnow().isoformat(),
                     "updated_at": dt.datetime.utcnow().isoformat()
                 }
+                
+                # Use validation method to assign rock properly
+                rock_data = self.assign_rock_with_validation(rock_data, owner_name, participants)
                 rocks_array.append(rock_data)
-                # Parse Task Collection for this rock using 'milestones'
+                
+                # Parse Task Collection for this rock - support both 'milestones' and 'weekly_tasks' structures
                 if "milestones" in rock:
                     for milestone in rock["milestones"]:
                         week_number = milestone.get("week", 0)
@@ -101,20 +196,38 @@ class DataParserService:
                                 "updated_at": dt.datetime.utcnow().isoformat()
                             }
                             milestones_array.append(task_data)
+                
+                # Handle 'weekly_tasks' structure (new OpenAI format)
+                elif "weekly_tasks" in rock:
+                    for week_data in rock["weekly_tasks"]:
+                        week_number = week_data.get("week", 0)
+                        tasks = week_data.get("tasks", [])
+                        for task in tasks:
+                            task_uuid = str(uuid.uuid4())
+                            task_title = task.get("task_title", "")
+                            sub_tasks = task.get("sub_tasks", [])
+                            
+                            task_data = {
+                                "id": task_uuid,
+                                "rock_id": rock_uuid,
+                                "week": week_number,
+                                "task_id": task_uuid,
+                                "task": task_title,
+                                "sub_tasks": sub_tasks if sub_tasks else None,
+                                "comments": [],
+                                "created_at": dt.datetime.utcnow().isoformat(),
+                                "updated_at": dt.datetime.utcnow().isoformat()
+                            }
+                            milestones_array.append(task_data)
             
             # Parse todos
             if "todos" in pipeline_response:
                 for todo in pipeline_response["todos"]:
                     todo_uuid = str(uuid.uuid4())
                     assigned_to_name = todo.get("assigned_to", "")
-                    assigned_to_id = None
                     
-                    # Find matching participant
-                    if assigned_to_name and participants:
-                        for participant in participants:
-                            if participant.get("employee_name", "").strip().lower() == assigned_to_name.strip().lower():
-                                assigned_to_id = str(participant.get("employee_id", ""))
-                                break
+                    # Use validation method to map name to ID
+                    assigned_to_id, validated_name = self.validate_and_map_participant(assigned_to_name, participants)
                     
                     # Parse due_date
                     due_date = todo.get("due_date", "")
@@ -133,7 +246,7 @@ class DataParserService:
                         "id": todo_uuid,
                         "todo_id": todo_uuid,
                         "task_title": todo.get("task_title", ""),
-                        "assigned_to": assigned_to_name,
+                        "assigned_to": validated_name if assigned_to_id else f"UNASSIGNED: {assigned_to_name}" if assigned_to_name else "",
                         "designation": todo.get("designation", ""),
                         "due_date": due_date,
                         "linked_issue": todo.get("linked_issue"),
@@ -150,21 +263,16 @@ class DataParserService:
                 for issue in pipeline_response["issues"]:
                     issue_uuid = str(uuid.uuid4())
                     raised_by_name = issue.get("raised_by", "")
-                    raised_by_id = None
                     
-                    # Find matching participant
-                    if raised_by_name and participants:
-                        for participant in participants:
-                            if participant.get("employee_name", "").strip().lower() == raised_by_name.strip().lower():
-                                raised_by_id = str(participant.get("employee_id", ""))
-                                break
+                    # Use validation method to map name to ID
+                    raised_by_id, validated_name = self.validate_and_map_participant(raised_by_name, participants)
                     
                     issue_data = {
                         "id": issue_uuid,
                         "issue_id": issue_uuid,
                         "issue_title": issue.get("issue_title", ""),
                         "description": issue.get("description", ""),
-                        "raised_by": raised_by_name,
+                        "raised_by": validated_name if raised_by_id else f"UNASSIGNED: {raised_by_name}" if raised_by_name else "",
                         "discussion_notes": issue.get("discussion_notes"),
                         "linked_solution_type": issue.get("linked_solution_type"),
                         "linked_solution_ref": issue.get("linked_solution_ref"),
@@ -272,4 +380,4 @@ class DataParserService:
 # Convenience function for easy usage
 async def parse_pipeline_response_to_files(pipeline_response: Dict[str, Any], file_prefix: Optional[str] = None, quarter_id: str = "", participants: Optional[List] = None) -> Tuple[str, str, str, str, str]:
     parser = DataParserService()
-    return await parser.parse_and_save(pipeline_response, file_prefix, quarter_id, participants) 
+    return await parser.parse_and_save(pipeline_response, file_prefix, quarter_id, participants)

@@ -22,11 +22,42 @@ class TodoService(BaseService):
     def safe_decrypt_dict(doc):
         if not doc:
             return {}
+        
         if "data_enc" in doc:
             data = decrypt_dict(doc, TodoService.EXCLUDE_FIELDS, TodoService.EXCLUDE_TYPES)
         else:
-            data = doc
-        data = fill_required_fields(data, "todo")
+            data = doc.copy()
+        
+        # Handle required UUID fields that can't be None
+        required_uuid_fields = ["id", "todo_id", "quarter_id"]
+        for field in required_uuid_fields:
+            if field not in data or data[field] is None or data[field] == "":
+                import uuid
+                data[field] = str(uuid.uuid4())
+        
+        # Handle optional UUID fields - convert empty strings to None
+        optional_uuid_fields = ["assigned_to_id"]
+        for field in optional_uuid_fields:
+            if field in data and data[field] == "":
+                data[field] = None
+        
+        # Handle required datetime fields
+        required_datetime_fields = ["created_at", "updated_at"]
+        for field in required_datetime_fields:
+            if field not in data or data[field] is None:
+                from datetime import datetime
+                data[field] = datetime.utcnow().isoformat()
+        
+        # Ensure required string fields have defaults
+        if "task_title" not in data or data["task_title"] is None:
+            data["task_title"] = "Untitled Task"
+        if "assigned_to" not in data or data["assigned_to"] is None:
+            data["assigned_to"] = ""
+        if "designation" not in data or data["designation"] is None:
+            data["designation"] = ""
+        if "status" not in data or data["status"] is None:
+            data["status"] = "pending"
+        
         return data
 
     @staticmethod

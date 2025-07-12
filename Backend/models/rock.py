@@ -26,8 +26,8 @@ class Rock(BaseModel):
     rock_name: str = Field(min_length=1, description="Name of the rock/goal")
     smart_objective: str = Field(min_length=1, description="SMART objective description")
     quarter_id: UUID = Field(description="Reference to parent quarter")
-    assigned_to_id: UUID = Field(description="ID of the assigned user")
-    assigned_to_name: str = Field(description="Name of the assigned user")
+    assigned_to_id: Optional[UUID] = Field(default=None, description="ID of the assigned user (None if unassigned)")
+    assigned_to_name: str = Field(default="", description="Name of the assigned user")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

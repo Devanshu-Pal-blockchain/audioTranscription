@@ -21,11 +21,34 @@ class TaskService(BaseService):
     def safe_decrypt_dict(doc):
         if not doc:
             return {}
+        
         if "data_enc" in doc:
             data = decrypt_dict(doc, TaskService.EXCLUDE_FIELDS, TaskService.EXCLUDE_TYPES)
         else:
-            data = doc
-        data = fill_required_fields(data, "task")
+            data = doc.copy()
+        
+        # Handle required UUID fields that can't be None
+        required_uuid_fields = ["id", "task_id", "rock_id"]
+        for field in required_uuid_fields:
+            if field not in data or data[field] is None or data[field] == "":
+                import uuid
+                data[field] = str(uuid.uuid4())
+        
+        # Handle required datetime fields
+        required_datetime_fields = ["created_at", "updated_at"]
+        for field in required_datetime_fields:
+            if field not in data or data[field] is None:
+                from datetime import datetime
+                data[field] = datetime.utcnow().isoformat()
+        
+        # Ensure required fields have defaults
+        if "task" not in data or data["task"] is None:
+            data["task"] = "Untitled Task"
+        if "week" not in data or data["week"] is None:
+            data["week"] = 1
+        if "comments" not in data or data["comments"] is None:
+            data["comments"] = []
+        
         return data
 
     @staticmethod

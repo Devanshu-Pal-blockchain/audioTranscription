@@ -9,10 +9,11 @@ from utils.secure_fields import encrypt_dict, decrypt_dict, fill_required_fields
 
 class QuarterService:
     collection = db.quarters
-    EXCLUDE_FIELDS = ["id", "created_at", "updated_at", "participants"]
+    EXCLUDE_FIELDS = ["id", "created_at", "updated_at", "participants", "status"]
     EXCLUDE_TYPES = {
         "id": UUID,
         "participants": List[UUID],
+        "status": int,
         "created_at": datetime,
         "updated_at": datetime
     }

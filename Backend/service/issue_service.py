@@ -23,11 +23,42 @@ class IssueService(BaseService):
     def safe_decrypt_dict(doc):
         if not doc:
             return {}
+        
         if "data_enc" in doc:
             data = decrypt_dict(doc, IssueService.EXCLUDE_FIELDS, IssueService.EXCLUDE_TYPES)
         else:
-            data = doc
-        data = fill_required_fields(data, "issue")
+            data = doc.copy()
+        
+        # Handle required UUID fields that can't be None
+        required_uuid_fields = ["id", "issue_id", "quarter_id"]
+        for field in required_uuid_fields:
+            if field not in data or data[field] is None or data[field] == "":
+                import uuid
+                data[field] = str(uuid.uuid4())
+        
+        # Handle optional UUID fields - convert empty strings to None
+        optional_uuid_fields = ["raised_by_id"]
+        for field in optional_uuid_fields:
+            if field in data and data[field] == "":
+                data[field] = None
+        
+        # Handle required datetime fields
+        required_datetime_fields = ["created_at", "updated_at"]
+        for field in required_datetime_fields:
+            if field not in data or data[field] is None:
+                from datetime import datetime
+                data[field] = datetime.utcnow().isoformat()
+        
+        # Ensure required string fields have defaults
+        if "issue_title" not in data or data["issue_title"] is None:
+            data["issue_title"] = "Untitled Issue"
+        if "description" not in data or data["description"] is None:
+            data["description"] = ""
+        if "raised_by" not in data or data["raised_by"] is None:
+            data["raised_by"] = ""
+        if "status" not in data or data["status"] is None:
+            data["status"] = "open"
+        
         return data
 
     @staticmethod

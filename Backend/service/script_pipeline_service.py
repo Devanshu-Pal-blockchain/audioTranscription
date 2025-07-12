@@ -15,8 +15,10 @@ import csv
 import demjson3
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from the Backend directory
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+env_path = os.path.join(backend_dir, '.env')
+load_dotenv(env_path)
 
 # Import required libraries
 try:
@@ -185,11 +187,12 @@ class PipelineService:
 
     # ==================== SCRIPT 2: SEMANTIC TOKENIZATION ====================
     def semantic_tokenization(self, transcription_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Script 2: Advanced semantic tokenization using spaCy"""
+        """Script 2: Enhanced semantic tokenization using spaCy for comprehensive analysis"""
         full_transcript = transcription_data["full_transcript"]
         
-        # Split transcript into segments for processing
-        n_segments = 6  # Match original script2.py
+        # Enhanced segmentation for longer meetings - create more granular segments
+        # for better detail extraction while maintaining manageable chunk sizes
+        n_segments = 12  # Increased from 6 to capture more detail from long meetings
         doc = self.nlp(full_transcript)
         sentences = [sent.text.strip() for sent in doc.sents if sent.text.strip()]
         total_sentences = len(sentences)
@@ -203,10 +206,10 @@ class PipelineService:
             if segment:
                 transcriptions.append(segment)
         
-        # Extract semantic tokens from each segment
+        # Extract enhanced semantic tokens from each segment
         semantic_tokens = []
         for i, text in enumerate(transcriptions):
-            logger.info(f"Processing segment {i+1}/{len(transcriptions)}")
+            logger.info(f"Processing segment {i+1}/{len(transcriptions)} with enhanced analysis")
             doc = self.nlp(text)
             
             segment_tokens = {
@@ -218,21 +221,35 @@ class PipelineService:
                 "dates": [],
                 "people": [],
                 "organizations": [],
-                "locations": []
+                "locations": [],
+                "monetary_values": [],
+                "percentages": [],
+                "technologies": [],
+                "products": [],
+                "processes": [],
+                "metrics": [],
+                "projects": [],
+                "departments": [],
+                "priorities": [],
+                "risks": [],
+                "opportunities": [],
+                "deadlines": [],
+                "dependencies": []
             }
             
-            # Extract named entities
+            # Enhanced named entity extraction
             for ent in doc.ents:
                 entity_info = {
                     "text": ent.text,
                     "label": ent.label_,
                     "start": ent.start_char,
                     "end": ent.end_char,
-                    "description": ent.label_  # Use label directly since spacy.explain is not exported
+                    "description": ent.label_,
+                    "confidence": getattr(ent, 'confidence', 1.0)
                 }
                 segment_tokens["entities"].append(entity_info)
                 
-                # Categorize entities
+                # Enhanced entity categorization
                 if ent.label_ in ["PERSON"]:
                     segment_tokens["people"].append(ent.text)
                 elif ent.label_ in ["DATE", "TIME"]:
@@ -241,65 +258,180 @@ class PipelineService:
                     segment_tokens["organizations"].append(ent.text)
                 elif ent.label_ in ["GPE", "LOC"]:
                     segment_tokens["locations"].append(ent.text)
+                elif ent.label_ in ["MONEY"]:
+                    segment_tokens["monetary_values"].append(ent.text)
+                elif ent.label_ in ["PERCENT"]:
+                    segment_tokens["percentages"].append(ent.text)
+                elif ent.label_ in ["PRODUCT"]:
+                    segment_tokens["products"].append(ent.text)
             
-            # Extract potential action items (sentences with action verbs)
+            # Enhanced action item extraction with more comprehensive verb patterns
             action_verbs = {
-                "complete", "finish", "deliver", "implement", "launch", 
-                "create", "build", "develop", "migrate", "close", "finalize",
-                "start", "begin", "initiate", "execute", "deploy", "release",
-                "review", "analyze", "test", "validate", "approve", "submit"
+                # Completion/Delivery verbs
+                "complete", "finish", "deliver", "implement", "launch", "finalize", "conclude",
+                # Creation/Development verbs  
+                "create", "build", "develop", "design", "architect", "construct", "generate",
+                # Process/Operational verbs
+                "migrate", "deploy", "release", "execute", "process", "handle", "manage",
+                # Initiation verbs
+                "start", "begin", "initiate", "commence", "establish", "setup", "configure",
+                # Analysis/Review verbs
+                "review", "analyze", "evaluate", "assess", "audit", "investigate", "research",
+                # Validation/Quality verbs
+                "test", "validate", "verify", "approve", "certify", "quality-check",
+                # Communication/Coordination verbs
+                "coordinate", "communicate", "present", "report", "update", "inform", "notify",
+                # Planning/Strategy verbs
+                "plan", "schedule", "organize", "strategize", "prioritize", "allocate",
+                # Improvement/Optimization verbs
+                "improve", "optimize", "enhance", "streamline", "automate", "scale",
+                # Problem-solving verbs
+                "resolve", "fix", "troubleshoot", "debug", "solve", "address", "handle"
             }
             
+            # Enhanced pattern matching for action items
             for sent in doc.sents:
+                sent_text = sent.text.strip()
                 sent_tokens = [token.lemma_.lower() for token in sent]
+                
+                # Check for action verbs
                 if any(verb in sent_tokens for verb in action_verbs):
-                    segment_tokens["action_items"].append(sent.text.strip())
+                    segment_tokens["action_items"].append(sent_text)
+                
+                # Check for deadline patterns
+                deadline_patterns = ["by", "due", "deadline", "before", "until", "no later than"]
+                if any(pattern in sent_text.lower() for pattern in deadline_patterns):
+                    segment_tokens["deadlines"].append(sent_text)
+                
+                # Check for dependency patterns
+                dependency_patterns = ["depends on", "requires", "needs", "after", "once", "following"]
+                if any(pattern in sent_text.lower() for pattern in dependency_patterns):
+                    segment_tokens["dependencies"].append(sent_text)
+                
+                # Check for priority indicators
+                priority_patterns = ["priority", "urgent", "critical", "important", "high priority", "asap"]
+                if any(pattern in sent_text.lower() for pattern in priority_patterns):
+                    segment_tokens["priorities"].append(sent_text)
+                
+                # Check for risk indicators
+                risk_patterns = ["risk", "concern", "issue", "problem", "challenge", "blocker", "obstacle"]
+                if any(pattern in sent_text.lower() for pattern in risk_patterns):
+                    segment_tokens["risks"].append(sent_text)
+                
+                # Check for opportunity indicators
+                opportunity_patterns = ["opportunity", "potential", "could", "might", "possibility", "chance"]
+                if any(pattern in sent_text.lower() for pattern in opportunity_patterns):
+                    segment_tokens["opportunities"].append(sent_text)
             
-            # Extract key noun phrases
+            # Extract enhanced key noun phrases and technical terms
             for chunk in doc.noun_chunks:
                 if len(chunk.text.split()) > 1:  # Multi-word phrases
-                    segment_tokens["key_phrases"].append(chunk.text)
+                    phrase = chunk.text.strip()
+                    segment_tokens["key_phrases"].append(phrase)
+                    
+                    # Categorize specific types of phrases
+                    phrase_lower = phrase.lower()
+                    
+                    # Technology-related terms
+                    tech_keywords = ["system", "platform", "software", "application", "database", "api", "tool", 
+                                   "framework", "infrastructure", "cloud", "server", "integration", "automation"]
+                    if any(keyword in phrase_lower for keyword in tech_keywords):
+                        segment_tokens["technologies"].append(phrase)
+                    
+                    # Process-related terms
+                    process_keywords = ["process", "workflow", "procedure", "methodology", "approach", "strategy",
+                                      "framework", "model", "pipeline", "lifecycle", "governance"]
+                    if any(keyword in phrase_lower for keyword in process_keywords):
+                        segment_tokens["processes"].append(phrase)
+                    
+                    # Project-related terms
+                    project_keywords = ["project", "initiative", "program", "effort", "campaign", "rollout",
+                                      "implementation", "migration", "transformation", "upgrade"]
+                    if any(keyword in phrase_lower for keyword in project_keywords):
+                        segment_tokens["projects"].append(phrase)
+                    
+                    # Department/team-related terms
+                    dept_keywords = ["team", "department", "group", "division", "unit", "squad", "committee",
+                                   "engineering", "marketing", "sales", "hr", "finance", "operations", "legal"]
+                    if any(keyword in phrase_lower for keyword in dept_keywords):
+                        segment_tokens["departments"].append(phrase)
+                    
+                    # Metrics/KPI-related terms
+                    metrics_keywords = ["metric", "kpi", "measurement", "target", "goal", "objective", "rate",
+                                      "percentage", "score", "index", "benchmark", "performance", "analytics"]
+                    if any(keyword in phrase_lower for keyword in metrics_keywords):
+                        segment_tokens["metrics"].append(phrase)
             
-            # Remove duplicates
-            for key in ["people", "dates", "organizations", "locations", "key_phrases"]:
-                segment_tokens[key] = list(set(segment_tokens[key]))
+            # Remove duplicates from all lists (except entities which contain dicts)
+            for key in segment_tokens:
+                if isinstance(segment_tokens[key], list):
+                    if key == "entities":
+                        # For entities (which are dicts), use a different approach to remove duplicates
+                        seen = set()
+                        unique_entities = []
+                        for entity in segment_tokens[key]:
+                            # Create a unique identifier for each entity based on text and label
+                            entity_id = (entity.get("text", ""), entity.get("label", ""))
+                            if entity_id not in seen:
+                                seen.add(entity_id)
+                                unique_entities.append(entity)
+                        segment_tokens[key] = unique_entities
+                    else:
+                        # For other lists containing strings, use set to remove duplicates
+                        segment_tokens[key] = list(set(segment_tokens[key]))
             
             semantic_tokens.append(segment_tokens)
         
-        # Generate summary statistics
-        total_people = set()
-        total_dates = set()
-        total_organizations = set()
-        total_action_items = []
-        total_entities = []
+        # Generate enhanced summary statistics
+        all_categories = {
+            "people": set(), "dates": set(), "organizations": set(), "locations": set(),
+            "monetary_values": set(), "percentages": set(), "technologies": set(),
+            "products": set(), "processes": set(), "metrics": set(), "projects": set(),
+            "departments": set(), "priorities": [], "risks": [], "opportunities": [],
+            "deadlines": [], "dependencies": [], "action_items": [], "entities": []
+        }
         
         for token in semantic_tokens:
-            total_people.update(token["people"])
-            total_dates.update(token["dates"])
-            total_organizations.update(token["organizations"])
-            total_action_items.extend(token["action_items"])
-            total_entities.extend(token["entities"])
+            for category, values in all_categories.items():
+                if category in token:
+                    if isinstance(values, set):
+                        # For sets, only add hashable items (strings)
+                        if category == "entities":
+                            # Skip entities here, handle separately
+                            continue
+                        else:
+                            # Add string items to sets
+                            values.update(token[category])
+                    else:
+                        # For lists, extend normally
+                        values.extend(token[category])
+            
+            # Handle entities separately (they are dictionaries, not hashable)
+            all_categories["entities"].extend(token.get("entities", []))
+        
+        # Convert sets to lists for JSON serialization
+        for category, values in all_categories.items():
+            if isinstance(values, set):
+                all_categories[category] = list(values)
         
         summary_stats = {
             "total_segments": len(semantic_tokens),
-            "unique_people": len(total_people),
-            "unique_dates": len(total_dates),
-            "unique_organizations": len(total_organizations),
-            "total_action_items": len(total_action_items),
-            "total_entities": len(total_entities),
-            "people_mentioned": list(total_people),
-            "dates_mentioned": list(total_dates),
-            "organizations_mentioned": list(total_organizations)
+            "enhanced_extraction": True,
+            "segment_size": f"Average {len(transcriptions[0].split()) if transcriptions else 0} words per segment",
+            **{f"unique_{k}": len(v) if isinstance(v, list) else 0 for k, v in all_categories.items()},
+            **{f"{k}_mentioned": v for k, v in all_categories.items()}
         }
         
-        logger.info(f"Semantic tokenization completed for {len(transcriptions)} segments")
+        logger.info(f"Enhanced semantic tokenization completed for {len(transcriptions)} segments with comprehensive extraction")
         
         return {
             "semantic_tokens": semantic_tokens,
             "summary_stats": summary_stats,
             "metadata": {
                 "total_segments_processed": len(transcriptions),
-                "processing_timestamp": datetime.now().isoformat()
+                "processing_timestamp": datetime.now().isoformat(),
+                "enhancement_level": "comprehensive",
+                "extraction_categories": list(all_categories.keys())
             }
         }
 
@@ -341,8 +473,8 @@ class PipelineService:
     async def _analyze_segment(self, segment: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze a single segment with LLM"""
         prompt = f"""
-        Analyze this meeting segment and extract key business information.
-        
+        You are an expert business meeting analyst specializing in comprehensive extraction and deep analysis of meeting content. This segment is part of a potentially long meeting (2-10 hours), so thoroughness and detail are critical.
+
         SEGMENT TEXT:
         {segment["text"]}
         
@@ -354,30 +486,97 @@ class PipelineService:
         - Action Items: {segment["action_items"]}
         - Key Phrases: {segment["key_phrases"]}
         
-        ANALYSIS REQUIREMENTS:
-        Please provide a structured analysis focusing on:
+        COMPREHENSIVE ANALYSIS REQUIREMENTS:
+        Provide a detailed, structured analysis covering ALL relevant aspects:
         
-        1. KEY TOPICS DISCUSSED:
-           - Main subjects and themes in this segment
+        1. **DETAILED KEY TOPICS & THEMES:**
+           - Primary business subjects discussed in depth
+           - Secondary topics and sub-themes
+           - Context and background information mentioned
+           - Strategic implications and business impact
+           - Any technical or operational details discussed
         
-        2. ACTION ITEMS IDENTIFIED:
-        - Label each as one of: runtime_solution, todo (due <14 days), or potential_rock (longer-term initiative)
-        - Include who it is assigned to and any stated or implied deadline
+        2. **COMPREHENSIVE ACTION ITEMS ANALYSIS:**
+           For EACH action item, provide:
+           - Complete description and context
+           - Classification: runtime_solution (solved immediately), todo (due <14 days), or potential_rock (strategic/long-term)
+           - Specific person assigned (if mentioned) and their role
+           - Exact deadline or timeframe mentioned
+           - Dependencies or prerequisites
+           - Success criteria or deliverables expected
+           - Resource requirements or constraints mentioned
+           - Priority level (if indicated)
         
-        3. PEOPLE AND ROLES:
-           - Who was mentioned and their involvement
+        3. **DETAILED PEOPLE & ROLE ANALYSIS:**
+           For EACH person mentioned:
+           - Their specific involvement and contributions to the discussion
+           - Their role, responsibilities, and authority level
+           - What they committed to or were assigned
+           - Their concerns, suggestions, or decisions made
+           - Relationships and interactions with other participants
         
-        4. TIMELINES AND DEADLINES:
-           - Any dates, deadlines, or timeframes mentioned
+        4. **COMPREHENSIVE TIMELINE & DEADLINE ANALYSIS:**
+           - All dates, deadlines, and timeframes with complete context
+           - Sequence of activities and dependencies
+           - Critical path items and potential bottlenecks
+           - Milestone dates and review points
+           - Any scheduling conflicts or constraints mentioned
         
-        5. DECISIONS OR AGREEMENTS:
-           - Any decisions made or agreements reached
+        5. **DETAILED DECISIONS & AGREEMENTS:**
+           - Specific decisions made with full context
+           - Who made the decision and the decision-making process
+           - Rationale and supporting arguments
+           - Alternatives considered and rejected
+           - Implementation approach agreed upon
+           - Success metrics and evaluation criteria
         
-        6. PROJECTS OR INITIATIVES:
-           - Any projects, initiatives, or strategic items discussed
+        6. **COMPREHENSIVE PROJECTS & INITIATIVES:**
+           - Complete project/initiative descriptions
+           - Scope, objectives, and expected outcomes
+           - Resource allocation and team assignments
+           - Budget implications or financial considerations
+           - Risk factors and mitigation strategies
+           - Integration with existing projects or systems
+           - Stakeholder impact and communication requirements
         
-        Focus only on actionable business items. Ignore general discussion, small talk, or technical troubleshooting.
-        Structure your response with clear sections and bullet points.
+        7. **BUSINESS CONTEXT & STRATEGIC IMPLICATIONS:**
+           - How this segment relates to broader business goals
+           - Strategic importance and priority level
+           - Competitive implications or market considerations
+           - Customer or stakeholder impact
+           - Operational or organizational changes required
+        
+        8. **ISSUES, PROBLEMS & CHALLENGES:**
+           - Problems or challenges explicitly discussed
+           - Root causes and contributing factors
+           - Impact on business operations or goals
+           - Proposed solutions and alternatives
+           - Resource requirements for resolution
+        
+        9. **METRICS, KPIs & PERFORMANCE INDICATORS:**
+           - Any numbers, percentages, or measurable targets mentioned
+           - Performance indicators or success criteria
+           - Historical data or trending information
+           - Benchmarks or comparison metrics
+        
+        10. **FOLLOW-UP REQUIREMENTS:**
+            - Information needed for next steps
+            - Reports or documentation to be prepared
+            - Meetings or reviews to be scheduled
+            - Communication requirements and stakeholders to inform
+        
+        IMPORTANT INSTRUCTIONS:
+        - Extract ALL actionable items, no matter how small or large
+        - Be extremely detailed and specific in your analysis
+        - Capture nuanced information and context
+        - Don't summarize - provide comprehensive detail
+        - Focus on business value and strategic importance
+        - Include technical details if they impact business outcomes
+        - Identify potential ROCKS (quarterly strategic initiatives) thoroughly
+        - Pay special attention to cross-functional dependencies
+        - Note any process improvements or efficiency opportunities
+        
+        Structure your response with clear numbered sections and detailed bullet points for maximum comprehensiveness.
         """
         
         try:
@@ -385,11 +584,10 @@ class PipelineService:
             response = self.openai_client.chat.completions.create(
                 model=model_name,
                 messages=[
-                    {"role": "system", "content": "You are an expert business analyst extracting key information from meeting segments."},
+                    {"role": "system", "content": "You are an expert business analyst specializing in comprehensive meeting analysis. Provide extremely detailed, thorough analysis with maximum specificity and depth. Extract every actionable item and business insight."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
-                max_tokens=2000
+                
             )
             return {
                 "segment_id": segment["segment_id"],
@@ -436,6 +634,96 @@ class PipelineService:
             lines.append(f'{name},{role},{resp}')
         return "\n".join(lines)
 
+    def aggregate_segment_insights(self, segment_analyses: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Aggregate insights from all segments to provide comprehensive context for ROCKS generation"""
+        
+        # Aggregate all extracted information
+        aggregated_insights = {
+            "comprehensive_themes": [],
+            "strategic_initiatives": [],
+            "operational_improvements": [],
+            "cross_functional_projects": [],
+            "technology_initiatives": [],
+            "process_enhancements": [],
+            "risk_management_items": [],
+            "opportunity_areas": [],
+            "stakeholder_commitments": {},
+            "timeline_analysis": {},
+            "resource_requirements": {},
+            "dependency_mapping": [],
+            "priority_classification": {}
+        }
+        
+        # Collect all themes and categorize them
+        all_themes = []
+        all_projects = []
+        all_risks = []
+        all_opportunities = []
+        all_deadlines = []
+        all_dependencies = []
+        
+        for analysis in segment_analyses:
+            analysis_text = analysis.get('analysis', '')
+            
+            # Extract strategic themes
+            if 'strategic' in analysis_text.lower() or 'initiative' in analysis_text.lower():
+                aggregated_insights["strategic_initiatives"].append({
+                    "segment_id": analysis.get('segment_id'),
+                    "content": analysis_text[:500],  # First 500 chars for context
+                    "entities": analysis.get('entities', []),
+                    "people": analysis.get('people', [])
+                })
+            
+            # Extract operational improvements
+            if any(keyword in analysis_text.lower() for keyword in ['improve', 'optimize', 'enhance', 'streamline', 'efficiency']):
+                aggregated_insights["operational_improvements"].append({
+                    "segment_id": analysis.get('segment_id'),
+                    "content": analysis_text[:500],
+                    "action_items": analysis.get('action_items', [])
+                })
+            
+            # Extract technology-related discussions
+            if any(keyword in analysis_text.lower() for keyword in ['system', 'platform', 'software', 'technology', 'tool', 'automation']):
+                aggregated_insights["technology_initiatives"].append({
+                    "segment_id": analysis.get('segment_id'),
+                    "content": analysis_text[:500],
+                    "technologies": getattr(analysis, 'technologies', [])
+                })
+            
+            # Extract cross-functional items
+            if any(keyword in analysis_text.lower() for keyword in ['team', 'department', 'cross-functional', 'coordinate', 'collaborate']):
+                aggregated_insights["cross_functional_projects"].append({
+                    "segment_id": analysis.get('segment_id'),
+                    "content": analysis_text[:500],
+                    "people": analysis.get('people', [])
+                })
+            
+            # Aggregate stakeholder commitments
+            for person in analysis.get('people', []):
+                if person not in aggregated_insights["stakeholder_commitments"]:
+                    aggregated_insights["stakeholder_commitments"][person] = []
+                aggregated_insights["stakeholder_commitments"][person].append({
+                    "segment": analysis.get('segment_id'),
+                    "context": analysis_text[:200],
+                    "action_items": analysis.get('action_items', [])
+                })
+        
+        # Generate comprehensive context summary
+        aggregated_insights["context_summary"] = {
+            "total_strategic_initiatives": len(aggregated_insights["strategic_initiatives"]),
+            "total_operational_improvements": len(aggregated_insights["operational_improvements"]),
+            "total_technology_initiatives": len(aggregated_insights["technology_initiatives"]),
+            "total_cross_functional_projects": len(aggregated_insights["cross_functional_projects"]),
+            "unique_stakeholders": len(aggregated_insights["stakeholder_commitments"]),
+            "complexity_indicators": {
+                "high_coordination_required": len(aggregated_insights["cross_functional_projects"]) > 2,
+                "significant_technology_component": len(aggregated_insights["technology_initiatives"]) > 1,
+                "multiple_strategic_tracks": len(aggregated_insights["strategic_initiatives"]) > 3
+            }
+        }
+        
+        return aggregated_insights
+
     # ==================== SCRIPT 4: ROCKS GENERATION ====================
     def generate_weekly_tasks_structure(self, num_weeks: int) -> str:
         """Generate the weekly_tasks structure dynamically (without task_id)"""
@@ -452,16 +740,21 @@ class PipelineService:
 
     async def generate_rocks(self, segment_analyses: List[Dict[str, Any]], num_weeks: int, participants: list, max_retries: int = 3) -> Dict[str, Any]:
         """Generate ROCKS from a list of segment analyses (combines segments and generates rocks in one step)"""
-        logger.info(f"Combining {len(segment_analyses)} segment analyses and generating ROCKS")
-        # Prepare segment analyses for LLM
+        logger.info(f"Combining {len(segment_analyses)} segment analyses and generating comprehensive ROCKS")
+        
+        # First, aggregate insights for better context
+        aggregated_insights = self.aggregate_segment_insights(segment_analyses)
+        
+        # Prepare segment analyses for LLM with enhanced context
         analyses_text = ""
         total_action_items = []
         all_people = set()
         all_dates = set()
         all_organizations = set()
+        
         for analysis in segment_analyses:
             analyses_text += f"""
-SEGMENT {analysis['segment_id'] + 1} ANALYSIS:
+SEGMENT {analysis['segment_id'] + 1} COMPREHENSIVE ANALYSIS:
 {analysis['analysis']}
 
 EXTRACTED INFORMATION:
@@ -469,172 +762,334 @@ EXTRACTED INFORMATION:
 - Dates: {analysis.get('dates', [])}
 - Organizations: {analysis.get('organizations', [])}
 - Action Items: {analysis.get('action_items', [])}
+- Technologies: {analysis.get('technologies', [])}
+- Projects: {analysis.get('projects', [])}
+- Departments: {analysis.get('departments', [])}
+- Priorities: {analysis.get('priorities', [])}
+- Risks: {analysis.get('risks', [])}
+- Opportunities: {analysis.get('opportunities', [])}
+- Metrics: {analysis.get('metrics', [])}
+- Deadlines: {analysis.get('deadlines', [])}
+- Dependencies: {analysis.get('dependencies', [])}
 ---
 """
             total_action_items.extend(analysis.get('action_items', []))
             all_people.update(analysis.get('people', []))
             all_dates.update(analysis.get('dates', []))
             all_organizations.update(analysis.get('organizations', []))
+        
         # Generate roles CSV string from participants
         roles_csv = self.participants_to_csv(participants)
         roles_str = roles_csv
+        
         # Generate weekly_tasks structure dynamically
         weekly_tasks_structure = self.generate_weekly_tasks_structure(num_weeks)
         # Create comprehensive ROCKS generation prompt
         prompt = f"""
-        # RIZEN Prompting Framework
+        # ENHANCED RIZEN Prompting Framework for Comprehensive Meeting Analysis
+
+        ## ROLE & EXPERTISE
+        You are a **Master EOS (Entrepreneurial Operating System) Facilitator, Senior Business Analyst, Strategic Meeting Architect, and Organizational Development Expert** with 15+ years of experience in:
+        - Comprehensive meeting analysis and synthesis
+        - Strategic quarterly planning and ROCKS development
+        - Cross-functional team coordination and accountability
+        - Long-duration meeting (2-10 hours) content extraction
+        - Multi-stakeholder initiative management
+
+        ## CRITICAL CONTEXT
+        This is analysis of a COMPREHENSIVE BUSINESS MEETING lasting potentially 2-10 HOURS with {len(segment_analyses)} segments containing rich, detailed discussions. Your task is to extract MAXIMUM VALUE and create COMPREHENSIVE, DETAILED output that captures ALL strategic initiatives, operational improvements, and accountability structures discussed.
+
+        ## CRITICAL PARTICIPANT VALIDATION RULES
         
-        ## ROLE
-        You are acting as a highly skilled **EOS (Entrepreneurial Operating System) Facilitator, Business Analyst, and Meeting Architect**.
-
-        Your responsibilities include:
-
-        1. **Issue Discovery & Structuring**:  
-        Carefully extract all problems or discussion bottlenecks that arise in the meeting and classify them as distinct, well-titled `issues`.
-
-        2. **Categorical Problem-Solving**:  
-        For each issue, identify whether it was:
-        - Solved **live in the meeting** (`runtime_solutions`)
-        - Assigned as a **short-term task** due within 14 days (`todos`)
-        - Scheduled for **strategic resolution** as a quarterly initiative (`rocks`)
-
-        3. **SMART Rock Creation**:  
-        Each `rock` must be a **strategic, quarterly goal** structured with a SMART objective:
-        - **S**pecific
-        - **M**easurable
-        - **A**chievable
-        - **R**elevant
-        - **T**ime-bound
-
-        Break each Rock down into weekly `milestones`, using a simplified format:
-        - Each milestone contains either:
-            - A single \"milestone\" (string)
-            - Or a \"milestones\" array (2–4 brief milestone strings)
-
-        4. **Summary Authoring**:  
-        Write a clear, layered `session_summary` consisting of:
-        - `meeting_overview`: what was discussed generally
-        - `issues_summary`: a thematic overview of all raised issues
-        - `todos_summary`: a synthesis of short-term follow-up items
-        - `rocks_summary`: a strategic wrap-up of longer-term initiatives
-
-        5. **Accuracy & Alignment**:
-        - Use **only names and roles** from the provided participants CSV
-        - Do **not fabricate** any roles, objectives, companies, or filler text
-        - Stay **concise, structured, and strictly JSON-compliant**
-
-        ## ZERO-SHOT TASK
-        Classify issues, generate solutions across the three types, and break down rocks into milestones over {num_weeks} weeks. Maintain strict EOS structure and clarity.
-                
-        ## INPUT
-        Based on the following segment analyses, synthesize a structured JSON response that includes:
-        - A layered session summary
-        - Issues raised
-        - Runtime solutions (solved in the meeting)
-        - To-Dos (must be completed within 14 days)
-        - SMART Rocks (quarter-long strategic initiatives)
+        **MANDATORY**: You MUST ONLY assign tasks, todos, issues, and rocks to participants who appear in the official participants list below. 
         
-        MEETING CONTEXT:
-        - Total segments analyzed: {len(segment_analyses)}
-        - People mentioned: {list(all_people)} 
-        - Organizations: {list(all_organizations)}
-        - Dates mentioned: {list(all_dates)}
-        - Action items identified: {len(total_action_items)}
-        - Number of weeks: {num_weeks}
-        
-        AVAILABLE ROLES AND EMPLOYEES (CSV):
+        **OFFICIAL PARTICIPANTS LIST:**
         {roles_str}
         
-        ## EXPLICIT CONSTRAINTS
-        - ONLY use the names and designations (job roles) provided in the above CSV for assigning owners to rocks and tasks.
-        - DO NOT invent or use any names or positions that are not present in the CSV.
-        - Do NOT invent, assume, or extrapolate any details (names, roles, organizations, objectives, etc.) that are not present in the input/context.
-        - Do not add any filler, repetition, or verbose explanations. Be concise and direct.
-        - Create a JSON structure with the following format:
+        **VALIDATION REQUIREMENTS:**
+        - For "rock_owner", "assigned_to", "raised_by" fields: Use EXACT full names from the participants list above
+        - If a person mentioned in the meeting is NOT in the participants list, DO NOT assign any work to them
+        - If assignment is unclear, leave the rock/task/todo UNASSIGNED rather than guessing
+        - Use "UNASSIGNED" as the value if no clear participant match exists
+        
+        ## ENHANCED RESPONSIBILITIES
+
+        ### 1. **COMPREHENSIVE Issue Discovery & Deep Structuring**
+        - Extract EVERY problem, challenge, bottleneck, or concern discussed
+        - Classify each issue with detailed context and business impact
+        - Identify root causes and contributing factors
+        - Analyze cross-functional dependencies and organizational impact
+        - Prioritize issues based on strategic importance and urgency
+
+        ### 2. **DETAILED Categorical Problem-Solving & Solution Architecture**
+        For EACH issue identified, determine comprehensive resolution approach:
+        - **Runtime Solutions**: Immediate fixes implemented during the meeting with full implementation details
+        - **Short-term Tasks (TODOs)**: Specific 14-day deliverables with detailed scope and success criteria
+        - **Strategic Quarterly Initiatives (ROCKS)**: Major strategic objectives requiring comprehensive planning
+
+        ### 3. **ADVANCED SMART Rock Creation & Strategic Planning**
+        Create MULTIPLE detailed ROCKS for EACH major initiative area:
+        - **Department/Function-Specific ROCKS**: Create separate rocks for different teams/functions
+        - **Cross-Functional ROCKS**: Strategic initiatives requiring multiple team coordination
+        - **Process Improvement ROCKS**: Operational efficiency and system enhancement initiatives
+        - **Customer/Market ROCKS**: Customer experience, market expansion, or product development initiatives
+        - **Technology/Infrastructure ROCKS**: Technical improvements, system implementations, or digital transformation
+        - **Compliance/Risk ROCKS**: Regulatory, security, or risk management initiatives
+
+        Each ROCK must include:
+        - **Specific**: Detailed, unambiguous objective with clear scope
+        - **Measurable**: Quantifiable success metrics, KPIs, and measurement methods
+        - **Achievable**: Realistic given resources and constraints mentioned
+        - **Relevant**: Clear business impact and strategic alignment
+        - **Time-bound**: Specific quarterly timeline with milestone checkpoints
+
+        ### 4. **COMPREHENSIVE Weekly Milestone Planning**
+        For each ROCK, create DETAILED weekly breakdown:
+        - Week-by-week progression with specific deliverables
+        - Resource allocation and team member assignments
+        - Dependency management and critical path identification
+        - Risk mitigation checkpoints and contingency planning
+        - Progress measurement and review mechanisms
+
+        ### 5. **DETAILED Summary Architecture & Strategic Communication**
+        Create COMPREHENSIVE summaries including:
+        - **Executive Overview**: High-level strategic themes and decisions
+        - **Departmental Impact Analysis**: How each function is affected
+        - **Resource Allocation Summary**: Human, financial, and technical resources required
+        - **Timeline and Dependency Matrix**: Critical path and interdependencies
+        - **Risk Assessment**: Potential challenges and mitigation strategies
+
+        ## ENHANCED INPUT ANALYSIS
+        
+        COMPREHENSIVE MEETING ANALYTICS:
+        - **Total Segments Analyzed**: {len(segment_analyses)} (indicating comprehensive, detailed meeting)
+        - **Unique Participants**: {list(all_people)}
+        - **Organizations Involved**: {list(all_organizations)}
+        - **Timeline References**: {list(all_dates)}
+        - **Total Action Items Identified**: {len(total_action_items)}
+        - **Strategic Planning Period**: {num_weeks} weeks
+        
+        **AGGREGATED STRATEGIC INSIGHTS**:
+        - Strategic Initiatives Identified: {aggregated_insights['context_summary']['total_strategic_initiatives']}
+        - Operational Improvements: {aggregated_insights['context_summary']['total_operational_improvements']}
+        - Technology Initiatives: {aggregated_insights['context_summary']['total_technology_initiatives']}
+        - Cross-Functional Projects: {aggregated_insights['context_summary']['total_cross_functional_projects']}
+        - Unique Stakeholders: {aggregated_insights['context_summary']['unique_stakeholders']}
+        - Complexity Indicators: {aggregated_insights['context_summary']['complexity_indicators']}
+        
+        **PARTICIPANT ROLES & RESPONSIBILITIES**:
+        {roles_str}
+
+        **COMPREHENSIVE SEGMENT ANALYSES**:
+        {analyses_text}
+        
+        **STRATEGIC CONTEXT AGGREGATION**:
+        Strategic Initiatives: {len(aggregated_insights['strategic_initiatives'])} major strategic tracks identified
+        Operational Improvements: {len(aggregated_insights['operational_improvements'])} efficiency opportunities
+        Technology Initiatives: {len(aggregated_insights['technology_initiatives'])} technical projects
+        Cross-Functional Projects: {len(aggregated_insights['cross_functional_projects'])} coordination requirements
+
+        ## ENHANCED OUTPUT REQUIREMENTS
+
+        ### CRITICAL INSTRUCTIONS FOR MAXIMUM DETAIL:
+        1. **GENERATE MULTIPLE ROCKS PER PERSON**: Each participant should have 2-4 strategic initiatives
+        2. **CREATE DEPARTMENT-SPECIFIC ROCKS**: Separate rocks for different functional areas
+        3. **DEVELOP CROSS-FUNCTIONAL ROCKS**: Strategic initiatives requiring coordination
+        4. **INCLUDE PROCESS IMPROVEMENT ROCKS**: Operational efficiency initiatives
+        5. **ADD CUSTOMER/MARKET ROCKS**: External-facing strategic objectives
+        6. **INCORPORATE TECHNOLOGY ROCKS**: System, tool, or infrastructure improvements
+        7. **ESTABLISH COMPLIANCE/GOVERNANCE ROCKS**: Risk management and regulatory initiatives
+
+        ### DETAILED JSON STRUCTURE REQUIREMENTS:
         {{
             "session_summary": {{
-                "meeting_overview": "High-level overview of the meeting",
-                "issues_summary": "Summary of raised problems",
-                "todos_summary": "Summary of tasks to be completed within 14 days",
-                "rocks_summary": "Summary of strategic quarterly goals"
+                "meeting_overview": "Comprehensive 3-4 sentence overview covering all major themes, strategic decisions, and organizational impact",
+                "strategic_themes": "Detailed analysis of strategic direction, priorities, and business transformation initiatives discussed",
+                "departmental_impact": "Comprehensive analysis of how different departments/functions are affected by meeting outcomes",
+                "issues_summary": "Detailed categorization and analysis of all problems, challenges, and improvement opportunities raised",
+                "todos_summary": "Comprehensive overview of short-term deliverables, immediate actions, and 14-day commitments",
+                "rocks_summary": "Strategic synthesis of quarterly initiatives, their business impact, and organizational transformation expected",
+                "resource_implications": "Analysis of human, financial, and technical resources required for successful implementation",
+                "success_metrics": "Key performance indicators and measurement criteria for tracking progress and success"
             }},
             "issues": [
+                // GENERATE 8-15 DETAILED ISSUES covering all aspects discussed
                 {{
-                    "issue_title": "Concise title",
-                    "description": "Brief summary of the issue",
-                    "raised_by": "Full Name",
-                    "discussion_notes": "Key discussion points",
+                    "issue_title": "Specific, descriptive title capturing the core problem",
+                    "description": "Comprehensive 2-3 sentence description including context, impact, and urgency",
+                    "business_impact": "Detailed analysis of how this issue affects operations, customers, or strategic goals",
+                    "root_causes": "Identified underlying causes and contributing factors",
+                    "raised_by": "EXACT Full Name from participants list ONLY - use 'UNASSIGNED' if person not in list",
+                    "supporting_stakeholders": ["Names of others who discussed or supported this issue"],
+                    "discussion_notes": "Detailed summary of key discussion points, alternatives considered, and decisions made",
+                    "urgency_level": "High | Medium | Low",
+                    "complexity_level": "High | Medium | Low",
+                    "resource_requirements": "Analysis of resources needed for resolution",
                     "linked_solution_type": "rock | todo | runtime_solution",
-                    "linked_solution_ref": "Title of the related solution"
+                    "linked_solution_ref": "Exact title of the related solution"
                 }}
             ],
             "runtime_solutions": [
+                // GENERATE 5-10 IMMEDIATE SOLUTIONS that were resolved during the meeting
                 {{
-                    "solution_title": "Action taken and resolved during meeting",
-                    "description": "How it was resolved",
-                    "assigned_to": "Full Name",
-                    "designation": "Job Title",
-                    "deadline": "YYYY-MM-DD"
+                    "solution_title": "Specific action taken and resolved during meeting with context",
+                    "description": "Detailed explanation of the solution, implementation approach, and immediate outcomes",
+                    "problem_addressed": "Reference to the specific issue this solution resolves",
+                    "implementation_details": "Step-by-step approach taken during the meeting",
+                    "assigned_to": "EXACT Full Name from participants list ONLY - use 'UNASSIGNED' if person not in list",
+                    "designation": "Exact job title from participants list",
+                    "deadline": "YYYY-MM-DD (realistic date based on discussion)",
+                    "success_criteria": "Specific measurable outcomes expected",
+                    "resources_utilized": "Resources allocated or utilized for this solution"
                 }}
             ],
             "todos": [
+                // GENERATE 10-20 DETAILED SHORT-TERM TASKS with comprehensive scope
                 {{
-                    "task_title": "Short-term action item",
-                    "assigned_to": "Full Name",
-                    "designation": "Job Title",
-                    "due_date": "YYYY-MM-DD",
-                    "linked_issue": "Title of related issue"
+                    "task_title": "Specific, actionable short-term deliverable with clear scope",
+                    "description": "Comprehensive 2-3 sentence description including context, requirements, and expected deliverables",
+                    "scope_details": "Detailed breakdown of what is included and excluded from this task",
+                    "assigned_to": "EXACT Full Name from participants list ONLY - use 'UNASSIGNED' if person not in list",
+                    "designation": "Exact job title from participants list",
+                    "due_date": "YYYY-MM-DD (within 14 days)",
+                    "priority_level": "High | Medium | Low",
+                    "estimated_effort": "Estimated hours or days required",
+                    "dependencies": ["List of prerequisites or dependencies"],
+                    "deliverables": ["Specific outputs or deliverables expected"],
+                    "success_criteria": "Measurable criteria for task completion",
+                    "linked_issue": "Title of related issue from issues array",
+                    "review_checkpoints": ["Interim review points or milestones"]
                 }}
             ],
             "rocks": [
+                // GENERATE 15-25 COMPREHENSIVE STRATEGIC ROCKS covering all participants and initiatives
                 {{
-                    "rock_owner": "Full Name",
-                    "designation": "Job Title",
-                    "smart_rock": "Specific, Measurable, Achievable, Relevant, Time-bound",
+                    "rock_owner": "EXACT Full Name from participants list ONLY - use 'UNASSIGNED' if person not in list",
+                    "designation": "Exact job title from participants list",
+                    "functional_area": "Department or functional area this rock impacts",
+                    "strategic_category": "Technology | Process | Customer | Market | Compliance | Operations | Finance | HR",
+                    "smart_rock": "Comprehensive, specific, measurable, achievable, relevant, time-bound quarterly objective with quantifiable outcomes",
+                    "business_justification": "Detailed explanation of why this rock is strategically important and its expected business impact",
+                    "success_metrics": [
+                        "Specific KPI 1 with target value",
+                        "Specific KPI 2 with target value",
+                        "Specific KPI 3 with target value"
+                    ],
+                    "resource_requirements": {{
+                        "human_resources": "Team members and time allocation required",
+                        "financial_budget": "Estimated budget or financial resources needed",
+                        "technical_resources": "Systems, tools, or technology required",
+                        "external_resources": "Vendors, contractors, or external support needed"
+                    }},
                     "milestones": [
+                        // GENERATE DETAILED WEEKLY BREAKDOWN FOR ALL {num_weeks} WEEKS
+                        // Example format for each week:
                         {{
                             "week": 1,
                             "milestones": [
-                                "Milestone 1 description",
-                                "Milestone 2 description"
-                            ]
+                                "Specific milestone 1 with clear deliverable and success criteria",
+                                "Specific milestone 2 with measurable outcome",
+                                "Specific milestone 3 with resource allocation details"
+                            ],
+                            "key_activities": ["Detailed activity 1", "Detailed activity 2"],
+                            "deliverables": ["Specific deliverable 1", "Specific deliverable 2"],
+                            "success_criteria": "Measurable criteria for week completion"
                         }},
                         {{
                             "week": 2,
-                            "milestone": "Single milestone for this week"
+                            "milestone": "Single comprehensive milestone with detailed scope and expected outcome",
+                            "key_activities": ["Detailed activity 1", "Detailed activity 2"],
+                            "deliverables": ["Specific deliverable"],
+                            "success_criteria": "Measurable criteria for week completion"
                         }}
+                        // IMPORTANT: YOU MUST GENERATE MILESTONES FOR ALL {num_weeks} WEEKS (1 through {num_weeks})
+                        // Do not stop at week 2 - continue generating milestones for weeks 3, 4, 5... up to week {num_weeks}
+                    ],
+                    "dependencies": [
+                        "Detailed dependency 1 with timeline impact",
+                        "Detailed dependency 2 with risk assessment"
+                    ],
+                    "risk_factors": [
+                        "Specific risk 1 with likelihood and impact assessment",
+                        "Specific risk 2 with mitigation strategy"
                     ],
                     "linked_issues": [
-                        "Title of related issue 1",
-                        "Title of related issue 2"
-                    ]
+                        "Exact title of related issue 1",
+                        "Exact title of related issue 2"
+                    ],
+                    "collaboration_requirements": ["Cross-functional coordination needs"],
+                    "review_checkpoints": ["Weekly review", "Bi-weekly stakeholder update", "Monthly strategic review"]
                 }}
             ],
+            "strategic_initiatives": {{
+                "cross_functional_projects": [
+                    // Projects requiring multiple departments
+                    {{
+                        "project_name": "Comprehensive project title",
+                        "description": "Detailed project scope and objectives",
+                        "involved_departments": ["Department 1", "Department 2"],
+                        "project_leads": ["Lead 1", "Lead 2"],
+                        "timeline": "Project duration and key milestones",
+                        "expected_outcomes": ["Outcome 1", "Outcome 2"]
+                    }}
+                ],
+                "process_improvements": [
+                    // Operational efficiency initiatives
+                    {{
+                        "improvement_area": "Specific process or area for improvement",
+                        "current_state": "Description of current situation",
+                        "target_state": "Desired future state",
+                        "implementation_approach": "Step-by-step improvement plan",
+                        "expected_benefits": ["Benefit 1", "Benefit 2"]
+                    }}
+                ],
+                "technology_initiatives": [
+                    // Technical improvements and implementations
+                    {{
+                        "initiative_name": "Technology project or implementation",
+                        "technical_scope": "Detailed technical requirements",
+                        "business_justification": "Why this technology initiative is needed",
+                        "implementation_timeline": "Technical implementation schedule",
+                        "expected_roi": "Return on investment expectations"
+                    }}
+                ]
+            }},
             "compliance_log": {{
                 "transcription_tool": "Python Speech Recognition",
                 "genai_model": "OpenAI {os.getenv('OPENAI_MODEL', 'gpt-4o')}",
-                "facilitator_review_timestamp": "{{datetime.now().isoformat()}}",
+                "facilitator_review_timestamp": "{datetime.now().isoformat()}",
                 "data_storage_platform": "Local Processing",
-                "processing_pipeline_version": "1.0",
+                "processing_pipeline_version": "2.0",
+                "analysis_depth": "Comprehensive",
+                "meeting_duration_estimate": "2-10 hours based on segment count",
                 "generation_attempts": "<GEN_ATTEMPTS>"
             }}
         }}
-        - Extract all relevant issues, todos, runtime solutions, and rocks from the segment analyses.
-        - Each rock should be a significant quarterly objective, not a small task.
-        - SMART objectives should include specific metrics and deadlines.
-        - Milestones should break down the rock into weekly or logical progression.
-        - For each week, provide distinct milestones in the 'milestones' array.
-        - If specific people aren't mentioned, use the most relevant employee and role from the above list. If no suitable match is found, use a generic role as before (e.g., "Project Manager").
-        - If detailed milestones aren't available, create logical weekly progression.
-        - Set realistic timelines based on the project scope.
-        - KEEP THE RESPONSE CONCISE - focus on the most important initiatives only.
-        - AVOID UNNECESSARY CONTENT - give direct, concise descriptions without verbose explanations.
-        - Your response must be strictly valid JSON. Do not include any incomplete or malformed objects or arrays. Do not include any extra or duplicate keys. Do not include any trailing commas. The output must be directly parseable by Python's json.loads().
-        
-        ## NOTES
-        - Focus only on actionable business items. Ignore general discussion, small talk, or technical troubleshooting.
-        - Structure your response with clear sections and bullet points where appropriate.
-        - Double-check that your output is strictly valid JSON, with no trailing commas, comments, or extraneous text.
+
+        ## CRITICAL SUCCESS FACTORS:
+        1. **MAXIMUM EXTRACTION**: Extract every actionable item, strategic initiative, and business opportunity
+        2. **COMPREHENSIVE ROCKS**: Generate 15-25 detailed ROCKS covering all participants and functional areas
+        3. **DETAILED MILESTONES**: Provide specific, measurable weekly milestones for each ROCK FOR ALL {num_weeks} WEEKS
+        4. **CROSS-FUNCTIONAL COVERAGE**: Ensure all departments and functions have strategic initiatives
+        5. **BUSINESS IMPACT FOCUS**: Emphasize strategic value and measurable business outcomes
+        6. **RESOURCE SPECIFICITY**: Detail human, financial, and technical resource requirements
+        7. **RISK CONSIDERATION**: Include risk assessment and mitigation strategies
+        8. **ACCOUNTABILITY STRUCTURE**: Clear ownership and review mechanisms
+
+        ## MILESTONE GENERATION REQUIREMENTS:
+        - CRITICAL: Generate milestones for ALL {num_weeks} weeks (not just 1-2 weeks)
+        - Each ROCK must have detailed weekly milestones from week 1 to week {num_weeks}
+        - Do not truncate or limit the milestone generation
+
+        ## FINAL VALIDATION REQUIREMENTS:
+        - Every participant from the CSV should have multiple ROCKS assigned
+        - All strategic themes from the meeting should be represented in ROCKS
+        - Each ROCK should have quantifiable success metrics
+        - Weekly milestones should be specific and actionable
+        - JSON structure must be complete and valid
+        - Response should reflect the depth and comprehensiveness of a long strategic meeting
+
+        Generate the most comprehensive, detailed, and strategic response possible that maximizes the value extracted from this extensive meeting content.
         """
         # Retry loop for JSON generation
         for attempt in range(max_retries + 1):
@@ -644,11 +1099,11 @@ EXTRACTED INFORMATION:
                 response = self.openai_client.chat.completions.create(
                     model=model_name,
                     messages=[
-                        {"role": "system", "content": "You are an expert business analyst creating ROCKS (quarterly goals) from meeting analyses. Return only valid JSON."},
+                        {"role": "system", "content": "You are a master EOS facilitator and business analyst creating comprehensive ROCKS (quarterly goals) from extensive meeting analyses. Generate maximum detail and extract every strategic initiative. Return only valid JSON with comprehensive detail."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=0.3,
-                    max_tokens=4000
+                    temperature=0.2,
+                    max_tokens=16000
                 )
                 response_content = response.choices[0].message.content or ""
                 json_response = self._handle_large_response(response_content.strip())
@@ -897,4 +1352,4 @@ async def run_pipeline_for_transcript(transcript_json: dict, num_weeks: int, qua
     Convenience function to run pipeline for a given transcript JSON
     """
     pipeline = PipelineService(admin_id)
-    return await pipeline.run_pipeline_for_transcript(transcript_json, num_weeks, quarter_id, participants) 
+    return await pipeline.run_pipeline_for_transcript(transcript_json, num_weeks, quarter_id, participants)

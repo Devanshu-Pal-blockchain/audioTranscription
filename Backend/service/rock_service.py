@@ -25,16 +25,49 @@ class RockService(BaseService):
         print("DEBUG: Original DB doc for Rock:", doc)
         if not doc:
             return {}
+        
         if "data_enc" in doc:
             data = decrypt_dict(doc, RockService.EXCLUDE_FIELDS, RockService.EXCLUDE_TYPES)
         else:
-            data = doc
+            data = doc.copy()
+        
         print("DEBUG: Decrypted data for Rock:", data)
-        data = fill_required_fields(data, "rock")
-        # Patch: ensure assigned_to_name is a string
+        
+        # Handle required UUID fields that can't be None
+        required_uuid_fields = ["id", "rock_id", "quarter_id"]
+        for field in required_uuid_fields:
+            if field not in data or data[field] is None or data[field] == "":
+                # Generate new UUID for missing required fields
+                import uuid
+                data[field] = str(uuid.uuid4())
+                print(f"DEBUG: Generated new UUID for missing required field '{field}': {data[field]}")
+        
+        # Handle optional UUID fields - convert empty strings to None
+        optional_uuid_fields = ["assigned_to_id"]
+        for field in optional_uuid_fields:
+            if field in data and data[field] == "":
+                data[field] = None
+                print(f"DEBUG: Converted empty string to None for optional UUID field '{field}'")
+        
+        # Handle required datetime fields
+        required_datetime_fields = ["created_at", "updated_at"]
+        for field in required_datetime_fields:
+            if field not in data or data[field] is None:
+                from datetime import datetime
+                data[field] = datetime.utcnow().isoformat()
+                print(f"DEBUG: Generated new datetime for missing required field '{field}': {data[field]}")
+        
+        # Ensure required string fields have defaults
+        if "rock_name" not in data or data["rock_name"] is None:
+            data["rock_name"] = "Untitled Rock"
+        if "smart_objective" not in data or data["smart_objective"] is None:
+            data["smart_objective"] = data["rock_name"]
+        
+        # Ensure assigned_to_name is a string
         if data.get("assigned_to_name") is None:
             data["assigned_to_name"] = ""
-        print("DEBUG: After fill_required_fields for Rock:", data)
+            
+        print("DEBUG: After cleanup for Rock:", data)
         return data
 
     @staticmethod
