@@ -33,7 +33,9 @@ def _serialize_excluded(fields: Dict[str, Any]) -> Dict[str, Any]:
     # Convert UUID and datetime fields to string for storage
     result = {}
     for k, v in fields.items():
-        if isinstance(v, UUID):
+        if v is None:
+            result[k] = v
+        elif isinstance(v, UUID):
             result[k] = str(v)
         elif isinstance(v, list) and v and isinstance(v[0], UUID):
             result[k] = [str(x) for x in v]
@@ -47,13 +49,28 @@ def _deserialize_excluded(fields: Dict[str, Any], types: Dict[str, Any]) -> Dict
     # Convert string fields back to UUID/datetime as needed
     result = {}
     for k, v in fields.items():
+        if v is None:
+            result[k] = v
+            continue
+            
         typ = types.get(k)
         if typ == UUID:
-            result[k] = UUID(v) if not isinstance(v, UUID) else v
+            if isinstance(v, str):
+                result[k] = UUID(v) if not isinstance(v, UUID) else v
+            else:
+                result[k] = v  # Already a UUID or other type
         elif typ == List[UUID]:
-            result[k] = [UUID(x) if not isinstance(x, UUID) else x for x in v]
+            if isinstance(v, list):
+                result[k] = [UUID(x) if isinstance(x, str) else x if not isinstance(x, UUID) else x for x in v]
+            else:
+                result[k] = v
         elif typ == datetime:
-            result[k] = datetime.fromisoformat(v) if isinstance(v, str) else v
+            if isinstance(v, str):
+                result[k] = datetime.fromisoformat(v) if isinstance(v, str) else v
+            elif isinstance(v, datetime):
+                result[k] = v  # Already a datetime object
+            else:
+                result[k] = v  # Some other type, keep as is
         else:
             result[k] = v
     return result
