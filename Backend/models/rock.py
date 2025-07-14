@@ -87,5 +87,10 @@ class RockPayload(BaseModel):
     quarter_id: str
     duration: str
     milestone_no: int
-    # Add other fields as needed from frontend payload
-    # Example: description: Optional[str] = None 
+    
+    # Optional enhanced fields for timeline optimization
+    original_weeks: Optional[int] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    compression_target: Optional[float] = None  # Target compression ratio
+    priority_milestones: Optional[List[str]] = None  # High-priority milestones that shouldn't be combined 

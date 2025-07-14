@@ -130,7 +130,7 @@ class RockService(BaseService):
 
     @staticmethod
     async def update_rock(rock_id: UUID, rock_update: Rock) -> Optional[Rock]:
-        update_data = rock_update.model_dump(exclude={"id", "created_at"})
+        update_data = rock_update.model_dump(exclude={"id", "rock_id", "created_at"})
         update_data["updated_at"] = datetime.utcnow()
         encrypted = encrypt_dict(update_data.copy(), RockService.EXCLUDE_FIELDS)
         await RockService.rocks.update_one(

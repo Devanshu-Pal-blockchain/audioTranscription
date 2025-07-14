@@ -154,7 +154,10 @@ async def update_rock_tasks(
     tasks: List[Task],
     current_user: User = Depends(admin_required)
 ) -> Dict:
-    """Update tasks for a rock (admin only)"""
+    """Replace all tasks for a rock with new tasks (admin only)"""
+    print(f"🔄 PUT /rocks/{rock_id}/tasks called")
+    print(f"📝 Received {len(tasks)} tasks")
+    
     rock = await RockService.get_rock(rock_id)
     if not rock:
         raise HTTPException(
@@ -162,16 +165,73 @@ async def update_rock_tasks(
             detail="Rock not found"
         )
     
-    updated_tasks = []
-    for task in tasks:
-        if task.rock_id != rock_id:
-            continue
-        updated_task = await TaskService.update_task(task.task_id, task)
-        if updated_task:
-            updated_tasks.append(updated_task)
+    # Step 1: Delete all existing tasks for this rock
+    existing_tasks = await TaskService.get_tasks_by_rock(rock_id)
+    print(f"🗑️ Deleting {len(existing_tasks)} existing tasks")
+    for existing_task in existing_tasks:
+        await TaskService.delete_task(existing_task.task_id)
+    
+    # Step 2: Create all new tasks
+    created_tasks = []
+    for i, task in enumerate(tasks):
+        try:
+            print(f"📝 Processing task {i+1}: {task.model_dump()}")
+            
+            # Create clean task data without IDs
+            task_data = task.model_dump(exclude={"id", "task_id"})
+            task_data["rock_id"] = rock_id
+            
+            # Handle problematic fields that cause validation errors
+            if task_data.get("sub_tasks") is None:
+                task_data["sub_tasks"] = {}
+                print(f"   🔧 Fixed null sub_tasks to empty dict")
+                
+            if task_data.get("comments") is None:
+                task_data["comments"] = []
+                print(f"   🔧 Fixed null comments to empty list")
+            
+            # Ensure week is positive integer
+            if "week" not in task_data or task_data["week"] <= 0:
+                task_data["week"] = 1
+                print(f"   🔧 Fixed week to 1")
+            
+            # Ensure task name is not empty
+            if not task_data.get("task") or task_data["task"].strip() == "":
+                task_data["task"] = "Default task"
+                print(f"   🔧 Fixed empty task name")
+            
+            print(f"   ✅ Clean task data: {task_data}")
+            
+            new_task = Task(**task_data)
+            created_task = await TaskService.create_task(new_task)
+            created_tasks.append(created_task)
+            print(f"   ✅ Created task: {created_task.task} (ID: {created_task.task_id})")
+            
+        except Exception as e:
+            print(f"❌ ERROR creating task {i+1}: {e}")
+            print(f"📋 Failed task data: {task.model_dump()}")
+            print(f"📋 Processed task data: {task_data}")
+            
+            # Return specific error details
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "error": f"Failed to create task {i+1}",
+                    "message": str(e),
+                    "task_data": task.model_dump(),
+                    "field_issues": {
+                        "sub_tasks": task_data.get("sub_tasks"),
+                        "comments": task_data.get("comments"),
+                        "week": task_data.get("week"),
+                        "task": task_data.get("task")
+                    }
+                }
+            )
+    
+    print(f"✅ Successfully created {len(created_tasks)} tasks")
     
     result = rock.model_dump()
-    result["tasks"] = [task.model_dump() for task in updated_tasks]
+    result["tasks"] = [task.model_dump() for task in created_tasks]
     return result
 
 @router.delete("/rocks/{rock_id}/tasks")

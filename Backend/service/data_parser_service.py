@@ -22,7 +22,7 @@ class DataParserService:
     
     def validate_and_map_participant(self, name: str, participants: Optional[List] = None) -> Tuple[Optional[str], str]:
         """
-        Validate and map participant name to ID with comprehensive fallback strategies.
+        Enhanced participant validation with Chain of Thought reasoning for better accuracy.
         
         Args:
             name: The name to validate and map
@@ -35,65 +35,177 @@ class DataParserService:
             logger.warning("Empty or None name provided for participant mapping")
             return None, ""
             
-        if not participants:
-            logger.warning(f"No participants list provided - cannot map name '{name}' to ID")
-            return None, name.strip()
+        # Clean up the input name
+        cleaned_name = name.strip()
+        
+        # Handle "UNASSIGNED" prefix cases
+        if cleaned_name.startswith("UNASSIGNED:"):
+            original_name = cleaned_name.replace("UNASSIGNED:", "").strip()
+            logger.info(f"Processing UNASSIGNED case: '{original_name}'")
+            # Try to match the original name after removing UNASSIGNED prefix
+            if original_name and participants:
+                result_id, result_name = self._attempt_participant_matching(original_name, participants)
+                if result_id:
+                    logger.info(f"Successfully mapped previously UNASSIGNED '{original_name}' to '{result_name}' (ID: {result_id})")
+                    return result_id, result_name
+            # If still no match, return as unassigned
+            return None, f"UNASSIGNED: {original_name}" if original_name else "UNASSIGNED"
             
-        name_key = name.strip().lower()
+        if not participants:
+            logger.warning(f"No participants list provided - cannot map name '{cleaned_name}' to ID")
+            return None, cleaned_name
+            
+        return self._attempt_participant_matching(cleaned_name, participants)
+    
+    def _attempt_participant_matching(self, name: str, participants: List) -> Tuple[Optional[str], str]:
+        """
+        Systematic participant matching using Chain of Thought approach.
+        """
+        name_key = name.lower().strip()
         
-        # Create name-to-ID mapping
-        name_to_id = {}
-        name_list = []
-        valid_participants = []
-        
+        # Build comprehensive participant mapping
+        participant_mappings = []
         for p in participants:
             employee_name = p.get("employee_name", "").strip()
             employee_id = p.get("employee_id")
             
             if employee_name and employee_id:
-                name_to_id[employee_name.lower()] = str(employee_id)
-                name_list.append(employee_name.lower())
-                valid_participants.append(employee_name)
+                participant_mappings.append({
+                    "name": employee_name,
+                    "name_lower": employee_name.lower(),
+                    "id": str(employee_id),
+                    "name_parts": employee_name.lower().split(),
+                    "first_name": employee_name.split()[0].lower() if employee_name.split() else "",
+                    "last_name": employee_name.split()[-1].lower() if len(employee_name.split()) > 1 else ""
+                })
         
-        logger.info(f"Available participants for matching: {valid_participants}")
+        logger.info(f"Attempting to match '{name}' against {len(participant_mappings)} participants")
         
         # Strategy 1: Exact match (case-insensitive)
-        if name_key in name_to_id:
-            logger.info(f"Exact match found for '{name}' -> ID: {name_to_id[name_key]}")
-            return name_to_id[name_key], name.strip()
+        for p in participant_mappings:
+            if name_key == p["name_lower"]:
+                logger.info(f"✅ Exact match: '{name}' -> '{p['name']}' (ID: {p['id']})")
+                return p["id"], p["name"]
         
-        # Strategy 2: Fuzzy matching for close names
-        if name_list:
-            close_matches = difflib.get_close_matches(name_key, name_list, n=1, cutoff=0.8)
-            if close_matches:
-                matched_name = close_matches[0]
-                mapped_id = name_to_id[matched_name]
-                # Find original name for logging
-                original_name = next((p["employee_name"] for p in participants 
-                                    if p.get("employee_name", "").lower() == matched_name), matched_name)
-                logger.info(f"Fuzzy match found for '{name}' -> '{original_name}' (ID: {mapped_id})")
-                return mapped_id, original_name
+        # Strategy 2: Exact match ignoring common prefixes/suffixes
+        cleaned_name_key = self._clean_name_for_matching(name_key)
+        for p in participant_mappings:
+            cleaned_participant = self._clean_name_for_matching(p["name_lower"])
+            if cleaned_name_key == cleaned_participant:
+                logger.info(f"✅ Clean match: '{name}' -> '{p['name']}' (ID: {p['id']})")
+                return p["id"], p["name"]
         
-        # Strategy 3: Partial name matching (first/last name)
-        for participant_name in name_list:
-            name_parts = name_key.split()
-            participant_parts = participant_name.split()
+        # Strategy 3: Fuzzy matching with higher threshold
+        participant_names = [p["name_lower"] for p in participant_mappings]
+        close_matches = difflib.get_close_matches(name_key, participant_names, n=1, cutoff=0.85)
+        if close_matches:
+            matched_name_lower = close_matches[0]
+            matched_participant = next(p for p in participant_mappings if p["name_lower"] == matched_name_lower)
+            logger.info(f"✅ Fuzzy match: '{name}' -> '{matched_participant['name']}' (ID: {matched_participant['id']})")
+            return matched_participant["id"], matched_participant["name"]
+        
+        # Strategy 4: First + Last name combination matching
+        input_parts = name_key.split()
+        if len(input_parts) >= 2:
+            input_first = input_parts[0]
+            input_last = input_parts[-1]
             
-            # Check if any part of the provided name matches any part of participant name
-            if any(part in participant_parts for part in name_parts if len(part) > 2):
-                mapped_id = name_to_id[participant_name]
-                original_name = next((p["employee_name"] for p in participants 
-                                    if p.get("employee_name", "").lower() == participant_name), participant_name)
-                logger.info(f"Partial match found for '{name}' -> '{original_name}' (ID: {mapped_id})")
-                return mapped_id, original_name
+            for p in participant_mappings:
+                if (input_first == p["first_name"] and input_last == p["last_name"]):
+                    logger.info(f"✅ First+Last match: '{name}' -> '{p['name']}' (ID: {p['id']})")
+                    return p["id"], p["name"]
+        
+        # Strategy 5: Partial name matching (any significant part)
+        for p in participant_mappings:
+            for input_part in input_parts:
+                if len(input_part) > 3:  # Only consider meaningful parts
+                    for name_part in p["name_parts"]:
+                        if input_part == name_part:
+                            logger.info(f"✅ Partial match: '{name}' -> '{p['name']}' (ID: {p['id']}) [matched on '{input_part}']")
+                            return p["id"], p["name"]
+        
+        # Strategy 6: Common name variations and nicknames
+        name_variations = self._get_name_variations(name_key)
+        for variation in name_variations:
+            for p in participant_mappings:
+                if variation == p["name_lower"] or variation in p["name_parts"]:
+                    logger.info(f"✅ Variation match: '{name}' (as '{variation}') -> '{p['name']}' (ID: {p['id']})")
+                    return p["id"], p["name"]
         
         # No match found
-        logger.warning(f"No matching participant found for name '{name}' in available participants: {valid_participants}")
-        return None, name.strip()
+        available_names = [p["name"] for p in participant_mappings]
+        logger.warning(f"❌ No match found for '{name}' in participants: {available_names}")
+        return None, name
+    
+    def _clean_name_for_matching(self, name: str) -> str:
+        """Remove common prefixes, suffixes, and titles for better matching"""
+        # Remove common titles and prefixes
+        prefixes_to_remove = ["mr.", "mrs.", "ms.", "dr.", "prof.", "sir", "madam"]
+        suffixes_to_remove = ["jr.", "sr.", "ii", "iii", "esq."]
+        
+        cleaned = name.lower().strip()
+        
+        # Remove prefixes
+        for prefix in prefixes_to_remove:
+            if cleaned.startswith(prefix + " "):
+                cleaned = cleaned[len(prefix):].strip()
+        
+        # Remove suffixes
+        for suffix in suffixes_to_remove:
+            if cleaned.endswith(" " + suffix):
+                cleaned = cleaned[:-len(suffix)].strip()
+        
+        return cleaned
+    
+    def _get_name_variations(self, name: str) -> List[str]:
+        """Generate common name variations and nicknames"""
+        variations = []
+        name_lower = name.lower().strip()
+        
+        # Common nickname mappings
+        nickname_map = {
+            "william": ["bill", "will", "billy"],
+            "robert": ["bob", "rob", "bobby"],
+            "richard": ["rick", "dick", "richie"],
+            "michael": ["mike", "micky"],
+            "christopher": ["chris", "topher"],
+            "matthew": ["matt"],
+            "andrew": ["andy", "drew"],
+            "anthony": ["tony"],
+            "jonathan": ["jon", "johnny"],
+            "benjamin": ["ben", "benny"],
+            "alexander": ["alex", "al"],
+            "nicholas": ["nick", "nicky"],
+            "elizabeth": ["liz", "beth", "betty"],
+            "jennifer": ["jen", "jenny"],
+            "jessica": ["jess", "jessie"],
+            "michelle": ["mich", "mickey"],
+            "stephanie": ["steph", "steffi"],
+            "katherine": ["kate", "kathy", "katie"],
+            "patricia": ["pat", "patty", "trish"],
+            "margaret": ["meg", "maggie", "peggy"]
+        }
+        
+        # Add direct variations
+        for full_name, nicknames in nickname_map.items():
+            if full_name in name_lower:
+                variations.extend(nicknames)
+            if name_lower in nicknames:
+                variations.append(full_name)
+        
+        # Add initials-based variations
+        parts = name_lower.split()
+        if len(parts) >= 2:
+            # First initial + last name
+            variations.append(f"{parts[0][0]}. {parts[-1]}")
+            # First name + last initial
+            variations.append(f"{parts[0]} {parts[-1][0]}.")
+        
+        return variations
     
     def assign_rock_with_validation(self, rock_data: Dict[str, Any], owner_name: str, participants: Optional[List] = None) -> Dict[str, Any]:
         """
-        Assign rock with proper validation, ensuring only valid participants get rocks assigned.
+        Enhanced rock assignment with Chain of Thought validation and better accuracy.
         """
         if not owner_name or not owner_name.strip():
             logger.info("Rock has no owner specified - creating unassigned rock")
@@ -101,18 +213,29 @@ class DataParserService:
             rock_data["assigned_to_name"] = ""
             return rock_data
         
-        owner_id, validated_name = self.validate_and_map_participant(owner_name, participants)
+        # Clean up owner name
+        cleaned_owner_name = owner_name.strip()
+        
+        # Use enhanced validation method
+        owner_id, validated_name = self.validate_and_map_participant(cleaned_owner_name, participants)
         
         if owner_id:
             # Valid participant found
             rock_data["assigned_to_id"] = owner_id
             rock_data["assigned_to_name"] = validated_name
-            logger.info(f"Rock '{rock_data.get('rock_name', 'Unknown')}' assigned to {validated_name} (ID: {owner_id})")
+            logger.info(f"✅ Rock '{rock_data.get('rock_name', 'Unknown')}' successfully assigned to {validated_name} (ID: {owner_id})")
         else:
-            # No valid participant found - create unassigned rock
-            logger.warning(f"Rock '{rock_data.get('rock_name', 'Unknown')}' cannot be assigned to '{owner_name}' - creating as unassigned")
-            rock_data["assigned_to_id"] = None
-            rock_data["assigned_to_name"] = f"UNASSIGNED: {owner_name}"
+            # Enhanced unassignment handling
+            if cleaned_owner_name.startswith("UNASSIGNED"):
+                # Already marked as unassigned by LLM
+                rock_data["assigned_to_id"] = None
+                rock_data["assigned_to_name"] = cleaned_owner_name
+                logger.info(f"ℹ️ Rock '{rock_data.get('rock_name', 'Unknown')}' is intentionally unassigned: {cleaned_owner_name}")
+            else:
+                # No valid participant found - create descriptive unassigned entry
+                logger.warning(f"⚠️ Rock '{rock_data.get('rock_name', 'Unknown')}' cannot be assigned to '{cleaned_owner_name}' - no matching participant found")
+                rock_data["assigned_to_id"] = None
+                rock_data["assigned_to_name"] = f"UNASSIGNED: {cleaned_owner_name}"
         
         return rock_data
     

@@ -959,7 +959,199 @@ EXTRACTED INFORMATION:
 
         Think through each step systematically and generate the most comprehensive response possible.
         """
-        
+        7. **ESTABLISH COMPLIANCE/GOVERNANCE ROCKS**: Risk management and regulatory initiatives
+
+        ### DETAILED JSON STRUCTURE REQUIREMENTS:
+        {{
+            "session_summary": {{
+                "meeting_overview": "Comprehensive 3-4 sentence overview covering all major themes, strategic decisions, and organizational impact",
+                "strategic_themes": "Detailed analysis of strategic direction, priorities, and business transformation initiatives discussed",
+                "departmental_impact": "Comprehensive analysis of how different departments/functions are affected by meeting outcomes",
+                "issues_summary": "Detailed categorization and analysis of all problems, challenges, and improvement opportunities raised",
+                "todos_summary": "Comprehensive overview of short-term deliverables, immediate actions, and 14-day commitments",
+                "rocks_summary": "Strategic synthesis of quarterly initiatives, their business impact, and organizational transformation expected",
+                "resource_implications": "Analysis of human, financial, and technical resources required for successful implementation",
+                "success_metrics": "Key performance indicators and measurement criteria for tracking progress and success"
+            }},
+            "issues": [
+                // GENERATE 8-15 DETAILED ISSUES covering all aspects discussed
+                {{
+                    "issue_title": "Specific, descriptive title capturing the core problem",
+                    "description": "Comprehensive 2-3 sentence description including context, impact, and urgency",
+                    "business_impact": "Detailed analysis of how this issue affects operations, customers, or strategic goals",
+                    "root_causes": "Identified underlying causes and contributing factors",
+                    "raised_by": "EXACT Full Name from participants list ONLY - use 'UNASSIGNED' if person not in list",
+                    "supporting_stakeholders": ["Names of others who discussed or supported this issue"],
+                    "discussion_notes": "Detailed summary of key discussion points, alternatives considered, and decisions made",
+                    "urgency_level": "High | Medium | Low",
+                    "complexity_level": "High | Medium | Low",
+                    "resource_requirements": "Analysis of resources needed for resolution",
+                    "linked_solution_type": "rock | todo | runtime_solution",
+                    "linked_solution_ref": "Exact title of the related solution"
+                }}
+            ],
+            "runtime_solutions": [
+                // GENERATE 5-10 IMMEDIATE SOLUTIONS that were resolved during the meeting
+                {{
+                    "solution_title": "Specific action taken and resolved during meeting with context",
+                    "description": "Detailed explanation of the solution, implementation approach, and immediate outcomes",
+                    "problem_addressed": "Reference to the specific issue this solution resolves",
+                    "implementation_details": "Step-by-step approach taken during the meeting",
+                    "assigned_to": "EXACT Full Name from participants list ONLY - use 'UNASSIGNED' if person not in list",
+                    "designation": "Exact job title from participants list",
+                    "deadline": "YYYY-MM-DD (realistic date based on discussion)",
+                    "success_criteria": "Specific measurable outcomes expected",
+                    "resources_utilized": "Resources allocated or utilized for this solution"
+                }}
+            ],
+            "todos": [
+                // GENERATE 10-20 DETAILED SHORT-TERM TASKS with comprehensive scope
+                {{
+                    "task_title": "Specific, actionable short-term deliverable with clear scope",
+                    "description": "Comprehensive 2-3 sentence description including context, requirements, and expected deliverables",
+                    "scope_details": "Detailed breakdown of what is included and excluded from this task",
+                    "assigned_to": "EXACT Full Name from participants list ONLY - use 'UNASSIGNED' if person not in list",
+                    "designation": "Exact job title from participants list",
+                    "due_date": "YYYY-MM-DD (within 14 days)",
+                    "priority_level": "High | Medium | Low",
+                    "estimated_effort": "Estimated hours or days required",
+                    "dependencies": ["List of prerequisites or dependencies"],
+                    "deliverables": ["Specific outputs or deliverables expected"],
+                    "success_criteria": "Measurable criteria for task completion",
+                    "linked_issue": "Title of related issue from issues array",
+                    "review_checkpoints": ["Interim review points or milestones"]
+                }}
+            ],
+            "rocks": [
+                // GENERATE 15-25 COMPREHENSIVE STRATEGIC ROCKS covering all participants and initiatives
+                {{
+                    "rock_owner": "EXACT Full Name from participants list ONLY - use 'UNASSIGNED' if person not in list",
+                    "designation": "Exact job title from participants list",
+                    "functional_area": "Department or functional area this rock impacts",
+                    "strategic_category": "Technology | Process | Customer | Market | Compliance | Operations | Finance | HR",
+                    "smart_rock": "Comprehensive, specific, measurable, achievable, relevant, time-bound quarterly objective with quantifiable outcomes",
+                    "business_justification": "Detailed explanation of why this rock is strategically important and its expected business impact",
+                    "success_metrics": [
+                        "Specific KPI 1 with target value",
+                        "Specific KPI 2 with target value",
+                        "Specific KPI 3 with target value"
+                    ],
+                    "resource_requirements": {{
+                        "human_resources": "Team members and time allocation required",
+                        "financial_budget": "Estimated budget or financial resources needed",
+                        "technical_resources": "Systems, tools, or technology required",
+                        "external_resources": "Vendors, contractors, or external support needed"
+                    }},
+                    "milestones": [
+                        // GENERATE DETAILED WEEKLY BREAKDOWN FOR ALL {num_weeks} WEEKS
+                        // Example format for each week:
+                        {{
+                            "week": 1,
+                            "milestones": [
+                                "Specific milestone 1 with clear deliverable and success criteria",
+                                "Specific milestone 2 with measurable outcome",
+                                "Specific milestone 3 with resource allocation details"
+                            ],
+                            "key_activities": ["Detailed activity 1", "Detailed activity 2"],
+                            "deliverables": ["Specific deliverable 1", "Specific deliverable 2"],
+                            "success_criteria": "Measurable criteria for week completion"
+                        }},
+                        {{
+                            "week": 2,
+                            "milestone": "Single comprehensive milestone with detailed scope and expected outcome",
+                            "key_activities": ["Detailed activity 1", "Detailed activity 2"],
+                            "deliverables": ["Specific deliverable"],
+                            "success_criteria": "Measurable criteria for week completion"
+                        }}
+                        // IMPORTANT: YOU MUST GENERATE MILESTONES FOR ALL {num_weeks} WEEKS (1 through {num_weeks})
+                        // Do not stop at week 2 - continue generating milestones for weeks 3, 4, 5... up to week {num_weeks}
+                    ],
+                    "dependencies": [
+                        "Detailed dependency 1 with timeline impact",
+                        "Detailed dependency 2 with risk assessment"
+                    ],
+                    "risk_factors": [
+                        "Specific risk 1 with likelihood and impact assessment",
+                        "Specific risk 2 with mitigation strategy"
+                    ],
+                    "linked_issues": [
+                        "Exact title of related issue 1",
+                        "Exact title of related issue 2"
+                    ],
+                    "collaboration_requirements": ["Cross-functional coordination needs"],
+                    "review_checkpoints": ["Weekly review", "Bi-weekly stakeholder update", "Monthly strategic review"]
+                }}
+            ],
+            "strategic_initiatives": {{
+                "cross_functional_projects": [
+                    // Projects requiring multiple departments
+                    {{
+                        "project_name": "Comprehensive project title",
+                        "description": "Detailed project scope and objectives",
+                        "involved_departments": ["Department 1", "Department 2"],
+                        "project_leads": ["Lead 1", "Lead 2"],
+                        "timeline": "Project duration and key milestones",
+                        "expected_outcomes": ["Outcome 1", "Outcome 2"]
+                    }}
+                ],
+                "process_improvements": [
+                    // Operational efficiency initiatives
+                    {{
+                        "improvement_area": "Specific process or area for improvement",
+                        "current_state": "Description of current situation",
+                        "target_state": "Desired future state",
+                        "implementation_approach": "Step-by-step improvement plan",
+                        "expected_benefits": ["Benefit 1", "Benefit 2"]
+                    }}
+                ],
+                "technology_initiatives": [
+                    // Technical improvements and implementations
+                    {{
+                        "initiative_name": "Technology project or implementation",
+                        "technical_scope": "Detailed technical requirements",
+                        "business_justification": "Why this technology initiative is needed",
+                        "implementation_timeline": "Technical implementation schedule",
+                        "expected_roi": "Return on investment expectations"
+                    }}
+                ]
+            }},
+            "compliance_log": {{
+                "transcription_tool": "Python Speech Recognition",
+                "genai_model": "OpenAI {os.getenv('OPENAI_MODEL', 'gpt-4o')}",
+                "facilitator_review_timestamp": "{datetime.now().isoformat()}",
+                "data_storage_platform": "Local Processing",
+                "processing_pipeline_version": "2.0",
+                "analysis_depth": "Comprehensive",
+                "meeting_duration_estimate": "2-10 hours based on segment count",
+                "generation_attempts": "<GEN_ATTEMPTS>"
+            }}
+        }}
+
+        ## CRITICAL SUCCESS FACTORS:
+        1. **MAXIMUM EXTRACTION**: Extract every actionable item, strategic initiative, and business opportunity
+        2. **COMPREHENSIVE ROCKS**: Generate 15-25 detailed ROCKS covering all participants and functional areas
+        3. **DETAILED MILESTONES**: Provide specific, measurable weekly milestones for each ROCK FOR ALL {num_weeks} WEEKS
+        4. **CROSS-FUNCTIONAL COVERAGE**: Ensure all departments and functions have strategic initiatives
+        5. **BUSINESS IMPACT FOCUS**: Emphasize strategic value and measurable business outcomes
+        6. **RESOURCE SPECIFICITY**: Detail human, financial, and technical resource requirements
+        7. **RISK CONSIDERATION**: Include risk assessment and mitigation strategies
+        8. **ACCOUNTABILITY STRUCTURE**: Clear ownership and review mechanisms
+
+        ## MILESTONE GENERATION REQUIREMENTS:
+        - CRITICAL: Generate milestones for ALL {num_weeks} weeks (not just 1-2 weeks)
+        - Each ROCK must have detailed weekly milestones from week 1 to week {num_weeks}
+        - Do not truncate or limit the milestone generation
+
+        ## FINAL VALIDATION REQUIREMENTS:
+        - Every participant from the CSV should have multiple ROCKS assigned
+        - All strategic themes from the meeting should be represented in ROCKS
+        - Each ROCK should have quantifiable success metrics
+        - Weekly milestones should be specific and actionable
+        - JSON structure must be complete and valid
+        - Response should reflect the depth and comprehensiveness of a long strategic meeting
+
+        Generate the most comprehensive, detailed, and strategic response possible that maximizes the value extracted from this extensive meeting content.
+        """
         # Retry loop for JSON generation
         for attempt in range(max_retries + 1):
             try:
@@ -1207,11 +1399,10 @@ EXTRACTED INFORMATION:
             return final_response
 
         except Exception as e:
-            logger.error(f"Pipeline from transcript failed: {e}")
+            logger.error(f"Pipeline (from transcript) failed: {e}")
             return {"error": str(e), "status": "failed"}
 
-
-# Convenience functions for standalone usage
+# Convenience function for easy usage
 async def run_pipeline_for_audio(audio_file: str, num_weeks: int, quarter_id: str, participants: list, admin_id: str = "default_admin") -> Dict[str, Any]:
     """Convenience function to run pipeline for a given audio file"""
     pipeline = PipelineService(admin_id)

@@ -129,14 +129,9 @@ class TaskService(BaseService):
         if not current_task:
             return None
 
-        # Validate rock exists if changing rock_id
-        if current_task.rock_id != task_update.rock_id:
-            rock_dict = await TaskService.rocks.find_one({"rock_id": str(task_update.rock_id)})
-            if not rock_dict:
-                raise HTTPException(status_code=404, detail="Rock not found")
-
+        # Note: rock_id and task_id are not updatable - they are excluded from the update
         task_update.week = week
-        update_data = task_update.model_dump(exclude={"id", "created_at"})
+        update_data = task_update.model_dump(exclude={"id", "task_id", "rock_id", "created_at"})
         update_data["updated_at"] = datetime.utcnow()
         encrypted = encrypt_dict(update_data.copy(), TaskService.EXCLUDE_FIELDS)
         
@@ -157,19 +152,14 @@ class TaskService(BaseService):
 
     @staticmethod
     async def update_task(task_id: UUID, task_update: Task) -> Optional[Task]:
-        """Update a task with rock validation"""
+        """Update a task with validation"""
         # Validate task exists
         current_task = await TaskService.get_task(task_id)
         if not current_task:
             return None
 
-        # If rock_id is changing, validate new rock exists
-        if current_task.rock_id != task_update.rock_id:
-            rock_dict = await TaskService.rocks.find_one({"rock_id": str(task_update.rock_id)})
-            if not rock_dict:
-                raise HTTPException(status_code=404, detail="Rock not found")
-
-        update_data = task_update.model_dump(exclude={"id", "created_at"})
+        # Note: task_id and rock_id are not updatable - they are excluded from the update
+        update_data = task_update.model_dump(exclude={"id", "task_id", "rock_id", "created_at"})
         update_data["updated_at"] = datetime.utcnow()
         encrypted = encrypt_dict(update_data.copy(), TaskService.EXCLUDE_FIELDS)
         

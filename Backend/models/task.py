@@ -57,7 +57,7 @@ class Task(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     rock_id: UUID = Field(description="Reference to parent rock")
     week: int = Field(gt=0, description="Week number for this task")
-    task_id: UUID = Field(default_factory=uuid4)
+    task_id: Union[UUID, str] = Field(default_factory=lambda: str(uuid4()), description="Task identifier (UUID or string)")
     task: str = Field(min_length=1, description="Task description")
     sub_tasks: Optional[Union[Dict[str, str], List]] = Field(default=None, description="Optional subtasks")
     comments: Union[List[Comment], Dict, List] = Field(default_factory=list, description="List of comments")
