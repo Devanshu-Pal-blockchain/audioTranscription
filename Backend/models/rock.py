@@ -78,3 +78,14 @@ class PipelineRuntimeSolution(BaseModel):
     owner_id: str
     designation: str
     deadline: str 
+
+class RockPayload(BaseModel):
+    rock_id: str
+    rock_name: str
+    milestones: list
+    weeks: int
+    quarter_id: str
+    duration: str
+    milestone_no: int
+    # Add other fields as needed from frontend payload
+    # Example: description: Optional[str] = None 

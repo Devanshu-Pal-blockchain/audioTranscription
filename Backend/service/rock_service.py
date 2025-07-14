@@ -7,6 +7,7 @@ from .base_service import BaseService
 from .user_service import UserService
 from datetime import datetime
 from utils.secure_fields import encrypt_dict, decrypt_dict, fill_required_fields
+from models.rock import RockPayload
 
 class RockService(BaseService):
     EXCLUDE_FIELDS = ["id", "rock_id", "created_at", "updated_at", "assigned_to_id", "quarter_id", "assigned_to_name"]

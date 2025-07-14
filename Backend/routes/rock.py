@@ -1,12 +1,13 @@
 from typing import List, Dict, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from models.rock import Rock
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
+from models.rock import Rock, RockPayload
 from models.task import Task
 from service.rock_service import RockService
 from service.task_service import TaskService
 from service.auth_service import get_current_user, admin_required
 from models.user import User
+from service.edit_milestones_service import process_custom_rock_payload
 
 router = APIRouter()
 
@@ -276,3 +277,9 @@ async def bulk_create_rocks_and_tasks(
         "total_rocks": len(created_rocks),
         "total_tasks": len(created_tasks)
     } 
+
+@router.post("/rocks/payload", response_model=dict)
+async def accept_rock_payload(payload: RockPayload = Body(...)):
+    """Accept a rock payload from the frontend, generate the LLM prompt, and return it (no DB interaction)."""
+    prompt = process_custom_rock_payload(payload)
+    return {"prompt": prompt} 
