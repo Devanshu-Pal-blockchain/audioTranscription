@@ -341,5 +341,5 @@ async def bulk_create_rocks_and_tasks(
 @router.post("/rocks/payload", response_model=dict)
 async def accept_rock_payload(payload: RockPayload = Body(...)):
     """Accept a rock payload from the frontend, generate the LLM prompt, and return it (no DB interaction)."""
-    prompt = process_custom_rock_payload(payload)
-    return {"prompt": prompt} 
+    result = process_custom_rock_payload(payload)
+    return result 

@@ -50,7 +50,7 @@ def call_llm_with_gemini(prompt: str) -> dict:
         ]
     }
     try:
-        response = requests.post(GEMINI_API_URL, headers=headers, params=params, json=data, timeout=30)
+        response = requests.post(GEMINI_API_URL, headers=headers, params=params, json=data, timeout=60)
         response.raise_for_status()
         result = response.json()
         # Gemini returns text in candidates[0]['content']['parts'][0]['text']
@@ -150,19 +150,26 @@ def process_custom_rock_payload(payload: RockPayload) -> Dict[str, Any]:
     # 5. Call LLM (Gemini) for milestone optimization
     llm_response = call_llm_with_gemini(prompt)
     if "error" in llm_response:
-        return {
-            "error": llm_response["error"], 
-            "llm_prompt": prompt, 
-            "raw_response": llm_response.get("raw_response"),
-            "analysis": current_analysis,
-            "compression_metrics": compression_metrics
-        }
-    
-    # 6. Get optimized milestones from LLM
-    optimized_milestones = llm_response["milestones"]
-    
-    # 7. Distribute optimized milestones across new timeline
-    weekly_distribution = distribute_milestones_to_weeks(optimized_milestones, new_weeks)
+        # Fallback: Use original milestones with simple redistribution when LLM fails
+        print(f"⚠️ LLM failed, using fallback mechanism: {llm_response['error']}")
+        
+        # Create a fallback by taking existing milestones and redistributing them
+        fallback_milestones = milestone_texts[:target_milestone_count] if len(milestone_texts) >= target_milestone_count else milestone_texts
+        
+        # If we need more milestones, duplicate some key ones
+        while len(fallback_milestones) < target_milestone_count:
+            fallback_milestones.append(f"Continued work on: {fallback_milestones[len(fallback_milestones) % len(milestone_texts)]}")
+        
+        optimized_milestones = fallback_milestones
+        weekly_distribution = distribute_milestones_to_weeks(optimized_milestones, new_weeks)
+        
+        # Continue with fallback data instead of returning error
+    else:
+        # 6. Get optimized milestones from LLM
+        optimized_milestones = llm_response["milestones"]
+        
+        # 7. Distribute optimized milestones across new timeline
+        weekly_distribution = distribute_milestones_to_weeks(optimized_milestones, new_weeks)
     
     # 8. Prepare comprehensive result
     result = {
@@ -183,7 +190,9 @@ def process_custom_rock_payload(payload: RockPayload) -> Dict[str, Any]:
         "analysis": current_analysis,
         "compression_metrics": compression_metrics,
         "duration": payload.duration,
-        "llm_prompt": prompt  # For transparency/debugging
+        "llm_prompt": prompt,  # For transparency/debugging
+        "fallback_used": "error" in llm_response,  # Indicate if fallback was used
+        "llm_error": llm_response.get("error") if "error" in llm_response else None  # Include LLM error for debugging
     }
     
     # 9. Validate result
