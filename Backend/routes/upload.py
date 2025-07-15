@@ -12,7 +12,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from models.user import User
 from service.auth_service import admin_required
-from service.script_pipeline_service_fixed import run_pipeline_for_audio, PipelineService, run_pipeline_for_transcript
+from service.script_pipeline_service import run_pipeline_for_audio, PipelineService, run_pipeline_for_transcript
 from service.data_parser_service import parse_pipeline_response_to_files
 from service.meeting_json_service import save_raw_context_json
 from service.document_parser_service import parse_document_content

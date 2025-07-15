@@ -23,52 +23,57 @@ class RockService(BaseService):
 
     @staticmethod
     def safe_decrypt_dict(doc):
-        print("DEBUG: Original DB doc for Rock:", doc)
+        import uuid
+        from datetime import datetime
         if not doc:
             return {}
-        
         if "data_enc" in doc:
             data = decrypt_dict(doc, RockService.EXCLUDE_FIELDS, RockService.EXCLUDE_TYPES)
         else:
             data = doc.copy()
-        
-        print("DEBUG: Decrypted data for Rock:", data)
-        
-        # Handle required UUID fields that can't be None
-        required_uuid_fields = ["id", "rock_id", "quarter_id"]
-        for field in required_uuid_fields:
-            if field not in data or data[field] is None or data[field] == "":
-                # Generate new UUID for missing required fields
-                import uuid
-                data[field] = str(uuid.uuid4())
-                print(f"DEBUG: Generated new UUID for missing required field '{field}': {data[field]}")
-        
-        # Handle optional UUID fields - convert empty strings to None
-        optional_uuid_fields = ["assigned_to_id"]
-        for field in optional_uuid_fields:
-            if field in data and data[field] == "":
-                data[field] = None
-                print(f"DEBUG: Converted empty string to None for optional UUID field '{field}'")
-        
-        # Handle required datetime fields
-        required_datetime_fields = ["created_at", "updated_at"]
-        for field in required_datetime_fields:
-            if field not in data or data[field] is None:
-                from datetime import datetime
-                data[field] = datetime.utcnow().isoformat()
-                print(f"DEBUG: Generated new datetime for missing required field '{field}': {data[field]}")
-        
-        # Ensure required string fields have defaults
-        if "rock_name" not in data or data["rock_name"] is None:
+
+        # Ensure all required fields are present and correctly typed
+        # UUID fields
+        for field in ["id", "rock_id", "quarter_id"]:
+            val = data.get(field)
+            if not val:
+                data[field] = uuid.uuid4()
+            elif isinstance(val, str):
+                try:
+                    data[field] = uuid.UUID(val)
+                except Exception:
+                    data[field] = uuid.uuid4()
+
+        # Optional UUID
+        if "assigned_to_id" in data:
+            val = data["assigned_to_id"]
+            if val in (None, ""):
+                data["assigned_to_id"] = None
+            elif isinstance(val, str):
+                try:
+                    data["assigned_to_id"] = uuid.UUID(val)
+                except Exception:
+                    data["assigned_to_id"] = None
+
+        # Datetime fields
+        for field in ["created_at", "updated_at"]:
+            val = data.get(field)
+            if not val:
+                data[field] = datetime.utcnow()
+            elif isinstance(val, str):
+                try:
+                    data[field] = datetime.fromisoformat(val)
+                except Exception:
+                    data[field] = datetime.utcnow()
+
+        # Strings
+        if not data.get("rock_name"):
             data["rock_name"] = "Untitled Rock"
-        if "smart_objective" not in data or data["smart_objective"] is None:
+        if not data.get("smart_objective"):
             data["smart_objective"] = data["rock_name"]
-        
-        # Ensure assigned_to_name is a string
         if data.get("assigned_to_name") is None:
             data["assigned_to_name"] = ""
-            
-        print("DEBUG: After cleanup for Rock:", data)
+
         return data
 
     @staticmethod

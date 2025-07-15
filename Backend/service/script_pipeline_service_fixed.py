@@ -1257,6 +1257,82 @@ EXTRACTED INFORMATION:
             logger.error(f"Pipeline from transcript failed: {e}")
             return {"error": str(e), "status": "failed"}
 
+    # ==================== AUDIO TRANSCRIPTION METHOD ====================
+    async def transcribe_audio(self, audio_path: str) -> Dict[str, Any]:
+        """
+        Transcribe a single audio file to text
+        Used for processing individual chunks during recording
+        
+        Args:
+            audio_path: Path to audio file
+            
+        Returns:
+            Dict containing transcription text and metadata
+        """
+        logger.info(f"Starting transcription for: {audio_path}")
+        
+        if not os.path.exists(audio_path):
+            logger.error(f"Audio file not found: {audio_path}")
+            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+        
+        # Check file size
+        file_size = os.path.getsize(audio_path)
+        logger.info(f"Audio file size: {file_size} bytes")
+        
+        if file_size == 0:
+            logger.error(f"Audio file is empty: {audio_path}")
+            raise Exception(f"Audio file is empty: {audio_path}")
+        
+        try:
+            # Try to get audio duration (this will test if the file is valid)
+            try:
+                audio = AudioSegment.from_file(audio_path)
+                duration_seconds = len(audio) / 1000.0
+                logger.info(f"Audio duration: {duration_seconds} seconds")
+            except Exception as audio_error:
+                logger.warning(f"Could not process audio with pydub (this is normal for WebM files): {audio_error}")
+                # For WebM chunks from browser, we might not be able to get duration without ffmpeg
+                # This is okay - we'll just set duration to 0 and let Groq handle the file
+                duration_seconds = 0
+            
+            # Transcribe using Groq - read file content first
+            logger.info(f"Reading file for transcription: {audio_path}")
+            with open(audio_path, "rb") as file:
+                file_content = file.read()
+                logger.info(f"File content size: {len(file_content)} bytes")
+                
+                if len(file_content) == 0:
+                    raise Exception("Audio file content is empty")
+                
+                # Reset file pointer and transcribe
+                file.seek(0)
+                transcription = self.groq_client.audio.translations.create(
+                    file=(os.path.basename(audio_path), file_content),
+                    model="whisper-large-v3",
+                    response_format="verbose_json",
+                )
+            
+            # Redact company names
+            transcript_text = transcription.text.replace("47Billion", "XXXYYYZZZ")
+            
+            result = {
+                "text": transcript_text,
+                "duration": duration_seconds,
+                "language": getattr(transcription, 'language', 'en'),
+                "confidence": getattr(transcription, 'confidence', None)
+            }
+            
+            logger.info(f"Transcription successful: {len(transcript_text)} characters")
+            log_step_completion("Audio transcription")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error transcribing audio {audio_path}: {e}")
+            # Log more details about the error
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error details: {str(e)}")
+            raise Exception(f"Failed to transcribe audio: {str(e)}")
+
 
 # Convenience functions for standalone usage
 async def run_pipeline_for_audio(audio_file: str, num_weeks: int, quarter_id: str, participants: list, admin_id: str = "default_admin") -> Dict[str, Any]:

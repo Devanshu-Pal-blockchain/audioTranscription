@@ -20,13 +20,59 @@ class QuarterService:
 
     @staticmethod
     def safe_decrypt_dict(doc):
+        import uuid
+        from datetime import datetime
         if not doc:
             return {}
         if "data_enc" in doc:
             data = decrypt_dict(doc, QuarterService.EXCLUDE_FIELDS, QuarterService.EXCLUDE_TYPES)
         else:
-            data = doc
-        data = fill_required_fields(data, "quarter")
+            data = doc.copy()
+
+        # Ensure all required fields are present and correctly typed
+        # UUID fields
+        if not data.get("id"):
+            data["id"] = uuid.uuid4()
+        elif isinstance(data["id"], str):
+            try:
+                data["id"] = uuid.UUID(data["id"])
+            except Exception:
+                data["id"] = uuid.uuid4()
+
+        # participants: list of UUIDs
+        if "participants" not in data or not isinstance(data["participants"], list):
+            data["participants"] = []
+        else:
+            # Convert all to UUID
+            data["participants"] = [uuid.UUID(x) if isinstance(x, str) else x for x in data["participants"] if x]
+
+        # Int fields
+        for field in ["weeks", "year", "status"]:
+            val = data.get(field)
+            if val is None:
+                data[field] = 0 if field != "year" else 2000
+            elif isinstance(val, str):
+                try:
+                    data[field] = int(val)
+                except Exception:
+                    data[field] = 0 if field != "year" else 2000
+
+        # Datetime fields
+        for field in ["created_at", "updated_at"]:
+            val = data.get(field)
+            if not val:
+                data[field] = datetime.utcnow()
+            elif isinstance(val, str):
+                try:
+                    data[field] = datetime.fromisoformat(val)
+                except Exception:
+                    data[field] = datetime.utcnow()
+
+        # Strings
+        for field in ["quarter", "title", "description"]:
+            if not data.get(field):
+                data[field] = "" if field != "quarter" else "Q1"
+
         return data
 
     @staticmethod
