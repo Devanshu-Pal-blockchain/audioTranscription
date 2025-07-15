@@ -49,14 +49,19 @@ class TodoService(BaseService):
                 data[field] = datetime.utcnow().isoformat()
         
         # Ensure required string fields have defaults
-        if "task_title" not in data or data["task_title"] is None:
+        if "task_title" not in data or data["task_title"] is None or data["task_title"] == "":
             data["task_title"] = "Untitled Task"
-        if "assigned_to" not in data or data["assigned_to"] is None:
-            data["assigned_to"] = ""
-        if "designation" not in data or data["designation"] is None:
-            data["designation"] = ""
+        if "assigned_to" not in data or data["assigned_to"] is None or data["assigned_to"] == "":
+            data["assigned_to"] = "Unassigned"
+        if "designation" not in data or data["designation"] is None or data["designation"] == "":
+            data["designation"] = "Team Member"
         if "status" not in data or data["status"] is None:
             data["status"] = "pending"
+        
+        # Ensure due_date is present
+        if "due_date" not in data or data["due_date"] is None:
+            from datetime import date
+            data["due_date"] = date.today().isoformat()
         
         return data
 
