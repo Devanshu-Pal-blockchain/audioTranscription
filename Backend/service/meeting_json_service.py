@@ -51,12 +51,29 @@ def safe_decrypt_raw_context(doc):
 def save_raw_context_json(file, admin_id):
     content = file.file.read()
     try:
-        # Try to decode as UTF-8 if bytes
+        # Handle different input types
         if isinstance(content, bytes):
-            content = content.decode('utf-8')
-        json_data = json.loads(content)
+            # Try to decode as UTF-8 first
+            try:
+                content = content.decode('utf-8')
+            except UnicodeDecodeError:
+                # If it fails, it might be already parsed content passed as bytes
+                # Try to load it as JSON bytes directly
+                import chardet
+                encoding = chardet.detect(content)['encoding']
+                if encoding:
+                    content = content.decode(encoding)
+                else:
+                    raise ValueError("Could not detect file encoding")
+        
+        # Parse JSON
+        if isinstance(content, str):
+            json_data = json.loads(content)
+        else:
+            json_data = content  # Already parsed content
+            
     except Exception as e:
-        print("[ERROR] Failed to parse uploaded JSON:", e)
+        print("[ERROR] Failed to parse uploaded content:", e)
         raise
     print("[DEBUG] Uploaded raw context JSON:", json_data)
     # Encrypt all except admin_id

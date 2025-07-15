@@ -188,7 +188,33 @@ class PipelineService:
     # ==================== SCRIPT 2: SEMANTIC TOKENIZATION ====================
     def semantic_tokenization(self, transcription_data: Dict[str, Any]) -> Dict[str, Any]:
         """Script 2: Enhanced semantic tokenization using spaCy for comprehensive analysis"""
-        full_transcript = transcription_data["full_transcript"]
+        # Robust extraction of transcript text with fallback options
+        full_transcript = ""
+        
+        if isinstance(transcription_data, dict):
+            # Try multiple possible keys
+            if "full_transcript" in transcription_data:
+                full_transcript = transcription_data["full_transcript"]
+            elif "transcript" in transcription_data:
+                full_transcript = transcription_data["transcript"]
+            elif "content" in transcription_data:
+                full_transcript = transcription_data["content"]
+            elif "text" in transcription_data:
+                full_transcript = transcription_data["text"]
+            else:
+                # If no recognized key, try to convert the entire dict to string
+                full_transcript = json.dumps(transcription_data)
+                logger.warning("No recognized transcript key found, using entire dict as string")
+        else:
+            # If it's not a dict, convert to string
+            full_transcript = str(transcription_data)
+            logger.warning("Transcription data is not a dict, converting to string")
+        
+        # Ensure we have some content
+        if not full_transcript or full_transcript.strip() == "":
+            raise ValueError("No transcript content found to process")
+        
+        logger.info(f"Processing transcript with {len(full_transcript)} characters")
         
         # Enhanced segmentation for longer meetings - create more granular segments
         # for better detail extraction while maintaining manageable chunk sizes
@@ -1160,8 +1186,29 @@ EXTRACTED INFORMATION:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             file_prefix = f"pipeline_{timestamp}"
 
-            # Step 2: Semantic Tokenization (transcript_json is already in the correct structure)
-            semantic_data = self.semantic_tokenization(transcript_json)
+            # Step 2: Semantic Tokenization (convert transcript_json to expected format)
+            # The semantic_tokenization method expects a dict with 'full_transcript' key
+            transcript_text = ""
+            if isinstance(transcript_json, dict):
+                # Extract transcript text from various possible structures
+                if "full_transcript" in transcript_json:
+                    transcript_text = transcript_json["full_transcript"]
+                elif "transcript" in transcript_json:
+                    transcript_text = transcript_json["transcript"]
+                elif "content" in transcript_json:
+                    transcript_text = transcript_json["content"]
+                elif "text" in transcript_json:
+                    transcript_text = transcript_json["text"]
+                else:
+                    # If none of the expected keys exist, convert the entire JSON to string
+                    transcript_text = json.dumps(transcript_json)
+            else:
+                # If it's not a dict, convert to string
+                transcript_text = str(transcript_json)
+            
+            # Create the expected structure for semantic_tokenization
+            transcript_data = {"full_transcript": transcript_text}
+            semantic_data = self.semantic_tokenization(transcript_data)
             log_step_completion("Step 2: Semantic Tokenization (from transcript)")
 
             # Step 3: Parallel Segment Analysis

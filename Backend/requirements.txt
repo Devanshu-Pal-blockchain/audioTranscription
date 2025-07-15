@@ -18,3 +18,9 @@ spacy
 openai
 groq
 demjson3
+
+# Document parsing libraries
+python-docx
+PyPDF2
+openpyxl
+chardet

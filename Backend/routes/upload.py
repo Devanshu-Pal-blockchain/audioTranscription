@@ -12,9 +12,10 @@ from typing import Optional
 from dotenv import load_dotenv
 from models.user import User
 from service.auth_service import admin_required
-from service.script_pipeline_service import run_pipeline_for_audio, PipelineService, run_pipeline_for_transcript
+from service.script_pipeline_service_fixed import run_pipeline_for_audio, PipelineService, run_pipeline_for_transcript
 from service.data_parser_service import parse_pipeline_response_to_files
 from service.meeting_json_service import save_raw_context_json
+from service.document_parser_service import parse_document_content
 
 load_dotenv()
 
@@ -31,25 +32,63 @@ async def upload_transcript(
     current_user: User = Depends(admin_required)
 ):
     """
-    Upload a transcript (raw context) JSON file, save to the raw context collection, and run the pipeline from step 2.
+    Upload a transcript file (JSON, PDF, Word, Excel, or text), parse it, save to the raw context collection, and run the pipeline from step 2.
+    Supports multiple file formats: .json, .pdf, .docx, .doc, .xlsx, .xls, .txt
     """
     import io
     import json
 
-    # Read uploaded file content and save to raw context collection
+    # Read uploaded file content
     file_content = await file.read()
+    
+    try:
+        # Parse the document content based on file type
+        filename = file.filename or "unknown_file"
+        file_type, parsed_content = parse_document_content(filename, file_content)
+        logging.info(f"Successfully parsed {file_type} file: {filename}")
+        
+        # If it's not JSON, convert the parsed content to JSON format
+        if file_type == 'json':
+            transcript_json = parsed_content
+        else:
+            # For non-JSON files, the parsed_content is already in JSON format
+            transcript_json = parsed_content
+        
+        # Debug logging - show structure being passed to pipeline
+        logging.info(f"Parsed transcript structure: {type(transcript_json)}")
+        logging.info(f"Transcript keys: {list(transcript_json.keys()) if isinstance(transcript_json, dict) else 'Not a dict'}")
+        if isinstance(transcript_json, dict):
+            # Log first 200 characters of each text field for debugging
+            for key in ['transcript', 'full_transcript', 'content', 'text']:
+                if key in transcript_json:
+                    content_preview = str(transcript_json[key])[:200] + "..." if len(str(transcript_json[key])) > 200 else str(transcript_json[key])
+                    logging.info(f"Found {key}: {content_preview}")
+            
+    except ValueError as e:
+        logging.error(f"Error parsing file {filename}: {e}")
+        raise HTTPException(status_code=400, detail=f"Error parsing file: {e}")
+    except Exception as e:
+        logging.error(f"Unexpected error parsing file {filename}: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error parsing file: {e}")
+
+    # Create a dummy file object for saving to raw context
     class DummyFile:
         def __init__(self, content):
-            self.file = io.BytesIO(content)
+            if isinstance(content, dict):
+                # Convert dict to JSON bytes
+                self.file = io.BytesIO(json.dumps(content).encode('utf-8'))
+            else:
+                self.file = io.BytesIO(content)
         def read(self):
             return self.file.read()
-    save_raw_context_json(DummyFile(file_content), str(current_user.employee_id))
-
-    # Parse transcript JSON
+    
+    # Save the parsed JSON content to raw context collection
     try:
-        transcript_json = json.loads(file_content)
+        save_raw_context_json(DummyFile(transcript_json), str(current_user.employee_id))
+        logging.info(f"Successfully saved parsed content from {filename} to raw context collection")
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid transcript JSON: {e}")
+        logging.error(f"Error saving to raw context collection: {e}")
+        raise HTTPException(status_code=500, detail=f"Error saving to database: {e}")
 
     # Require quarterWeeks and id (quarter_id)
     if quarterWeeks is None:
@@ -71,7 +110,7 @@ async def upload_transcript(
         found_ids = {str(user.employee_id) for user in participant_details}
         missing_ids = [pid for pid in participant_ids if pid not in found_ids]
         if missing_ids:
-            logger.warning(f"Some participant IDs from the frontend were not found in the database: {missing_ids}")
+            logging.warning(f"Some participant IDs from the frontend were not found in the database: {missing_ids}")
         participant_info = [
             {
                 "employee_id": str(user.employee_id),
@@ -81,7 +120,7 @@ async def upload_transcript(
             }
             for user in participant_details
         ]
-        logger.info(f"Fetched participant info: {participant_info}")
+        logging.info(f"Fetched participant info: {participant_info}")
 
     # Start pipeline in background (non-blocking)
     async def process_transcript_background(current_user):
