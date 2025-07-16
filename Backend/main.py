@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import quarter, rock, task, user, auth, upload, csv_routes, todo, issue, recording
+from routes import quarter, rock, task, user, auth, upload, csv_routes, todo, issue, recording, chatbot
 import logging
 app = FastAPI(
     title="Meeting Transcription API",
@@ -28,6 +28,7 @@ app.include_router(user.router, tags=["users"])
 app.include_router(upload.router, prefix="/admin", tags=["upload"])
 app.include_router(recording.router, prefix="/recording", tags=["recording"])
 app.include_router(csv_routes.router, prefix="/csv", tags=["csv"])
+app.include_router(chatbot.router, prefix="/chatbot", tags=["chatbot"])
 
 @app.get("/")
 async def root():
