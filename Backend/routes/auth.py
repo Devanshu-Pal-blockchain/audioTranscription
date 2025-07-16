@@ -3,8 +3,17 @@ from fastapi.security import OAuth2PasswordRequestForm
 from service.auth_service import authenticate_user, create_access_token, Token
 from service.user_service import UserService
 from models.user import User
+from pydantic import BaseModel
 
 router = APIRouter()
+
+# Pydantic models for forgot password
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    new_password: str
 
 @router.post("/register-admin", response_model=User)
 async def register_admin(user: User) -> User:
@@ -57,3 +66,77 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Token:
         role=user.employee_role,
         email=user.employee_email
     )
+
+@router.post("/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    """
+    Forgot password endpoint - validates email exists
+    Since no email service is required, this just validates the email
+    """
+    try:
+        # Check if user exists with this email
+        user = await UserService.get_user_by_email(request.email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No account found with this email address"
+            )
+        
+        # Since no email service, just return success
+        # In a real application, you would send an email with reset link
+        return {
+            "message": "Password reset instructions would be sent to your email",
+            "email": request.email,
+            "status": "success"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process forgot password request"
+        )
+
+@router.post("/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    """
+    Reset password endpoint - updates password for given email
+    """
+    try:
+        # Check if user exists with this email
+        user = await UserService.get_user_by_email(request.email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No account found with this email address"
+            )
+        
+        # Validate new password (basic validation)
+        if len(request.new_password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password must be at least 6 characters long"
+            )
+        
+        # Update the password
+        success = await UserService.update_password(user.employee_id, request.new_password)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update password"
+            )
+        
+        return {
+            "message": "Password has been reset successfully",
+            "email": request.email,
+            "status": "success"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset password"
+        )
