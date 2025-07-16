@@ -1186,8 +1186,7 @@ EXTRACTED INFORMATION:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             file_prefix = f"pipeline_{timestamp}"
 
-            # Step 2: Semantic Tokenization (convert transcript_json to expected format)
-            # The semantic_tokenization method expects a dict with 'full_transcript' key
+            # Extract transcript text from various possible structures
             transcript_text = ""
             if isinstance(transcript_json, dict):
                 # Extract transcript text from various possible structures
@@ -1206,7 +1205,44 @@ EXTRACTED INFORMATION:
                 # If it's not a dict, convert to string
                 transcript_text = str(transcript_json)
             
-            # Create the expected structure for semantic_tokenization
+            # Validate content quality before processing
+            transcript_text = transcript_text.strip()
+            word_count = len(transcript_text.split())
+            
+            logger.info(f"Transcript content validation: {word_count} words, length: {len(transcript_text)} chars")
+            
+            # Content validation with informative response
+            if word_count < 20:  # Less than 20 words is likely insufficient for business analysis
+                warning_msg = f"Transcript contains only {word_count} words and may not generate meaningful business insights. "
+                warning_msg += "For best results, provide meeting content with discussions about goals, tasks, responsibilities, or action items."
+                
+                logger.warning(f"Insufficient content for analysis: {warning_msg}")
+                logger.info(f"Content preview: '{transcript_text[:200]}...'")
+                
+                # Return empty results with informative message instead of failing
+                empty_result = {
+                    "rocks": [],
+                    "todos": [],
+                    "issues": [],
+                    "runtime_solutions": [],
+                    "session_summary": {
+                        "total_segments": 0,
+                        "total_rocks": 0,
+                        "total_todos": 0,
+                        "total_issues": 0,
+                        "total_runtime_solutions": 0,
+                        "analysis_note": warning_msg,
+                        "content_preview": transcript_text[:200],
+                        "word_count": word_count
+                    }
+                }
+                
+                # Still save the files so user can see the analysis
+                result = await parse_pipeline_response_to_files(empty_result, quarter_id, self.admin_id)
+                return result
+
+            # Step 2: Semantic Tokenization (convert transcript_json to expected format)
+            # The semantic_tokenization method expects a dict with 'full_transcript' key
             transcript_data = {"full_transcript": transcript_text}
             semantic_data = self.semantic_tokenization(transcript_data)
             log_step_completion("Step 2: Semantic Tokenization (from transcript)")

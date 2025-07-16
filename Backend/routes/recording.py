@@ -422,6 +422,12 @@ async def submit_selected_sessions(
                 logger.warning(f"Skipping session {session_id} - no transcript content available")
                 continue  # Skip sessions without transcripts to avoid unnecessary LLM costs
             
+            # Check for minimal content that won't generate business insights
+            word_count = len(transcript_content.split())
+            if word_count < 10:  # Less than 10 words is likely just test content
+                logger.warning(f"Skipping session {session_id} - transcript too short ({word_count} words): '{transcript_content[:100]}...'")
+                continue
+            
             # Collect transcript data
             transcript_data = {
                 "session_id": session_id,
@@ -449,10 +455,35 @@ async def submit_selected_sessions(
         # Check if we have any valid sessions to submit
         if not all_transcripts:
             logger.warning(f"No sessions with valid transcripts found from {len(selected_session_ids)} requested sessions")
-            raise HTTPException(
-                status_code=400, 
-                detail=f"No sessions with valid transcripts found. Sessions may not have completed transcription yet."
-            )
+            
+            # Check if sessions exist but have insufficient content
+            skipped_sessions = []
+            for session_id in selected_session_ids:
+                session = active_recording_sessions.get(session_id) or completed_sessions.get(session_id)
+                if session:
+                    transcript_content = session["current_transcript"].strip()
+                    word_count = len(transcript_content.split()) if transcript_content else 0
+                    skipped_sessions.append({
+                        "session_id": session_id,
+                        "reason": "no_content" if not transcript_content else f"insufficient_content ({word_count} words)",
+                        "content_preview": transcript_content[:100] if transcript_content else "No content"
+                    })
+            
+            if skipped_sessions:
+                detail_msg = "Sessions were skipped due to insufficient business content. "
+                detail_msg += "For ROCKs to be generated, recordings should contain business discussions, "
+                detail_msg += "tasks, goals, or actionable items. Try recording actual meeting content instead of test phrases."
+                
+                raise HTTPException(
+                    status_code=400, 
+                    detail=detail_msg,
+                    headers={"X-Skipped-Sessions": json.dumps(skipped_sessions)}
+                )
+            else:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"No sessions with valid transcripts found. Sessions may not have completed transcription yet."
+                )
         
         # Get session parameters
         try:
