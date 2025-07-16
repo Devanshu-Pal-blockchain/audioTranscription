@@ -57,13 +57,29 @@ async def upload_transcript(
         # Debug logging - show structure being passed to pipeline
         logging.info(f"Parsed transcript structure: {type(transcript_json)}")
         logging.info(f"Transcript keys: {list(transcript_json.keys()) if isinstance(transcript_json, dict) else 'Not a dict'}")
+        
+        # Enhanced debug logging with word counts
+        print(f"=== FRONTEND TRANSCRIPT DEBUG ===")
+        print(f"File type: {file_type}")
+        print(f"Filename: {filename}")
+        print(f"Transcript data type: {type(transcript_json)}")
+        
         if isinstance(transcript_json, dict):
             # Log first 200 characters of each text field for debugging
             for key in ['transcript', 'full_transcript', 'content', 'text']:
                 if key in transcript_json:
-                    content_preview = str(transcript_json[key])[:200] + "..." if len(str(transcript_json[key])) > 200 else str(transcript_json[key])
+                    content = str(transcript_json[key])
+                    word_count = len(content.split())
+                    char_count = len(content)
+                    content_preview = content[:200] + "..." if len(content) > 200 else content
+                    print(f"Found {key}: {word_count} words, {char_count} characters")
+                    print(f"Preview: {content_preview}")
                     logging.info(f"Found {key}: {content_preview}")
-            
+        
+        # Print entire structure (truncated)
+        print(f"Full transcript structure: {str(transcript_json)[:500]}...")
+        print(f"=== END FRONTEND TRANSCRIPT DEBUG ===")
+        
     except ValueError as e:
         logging.error(f"Error parsing file {filename}: {e}")
         raise HTTPException(status_code=400, detail=f"Error parsing file: {e}")

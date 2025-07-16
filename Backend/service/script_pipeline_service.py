@@ -76,7 +76,11 @@ class PipelineService:
             if not api_key:
                 raise ValueError("OPENAI_API_KEY environment variable not set")
             
-            return OpenAI(api_key=api_key)
+            # Initialize with extended timeout for large responses
+            return OpenAI(
+                api_key=api_key,
+                timeout=120.0  # 2 minutes timeout for large responses
+            )
         except Exception as e:
             logger.error(f"Failed to initialize OpenAI client: {e}")
             raise
@@ -188,6 +192,17 @@ class PipelineService:
     # ==================== SCRIPT 2: SEMANTIC TOKENIZATION ====================
     def semantic_tokenization(self, transcription_data: Dict[str, Any]) -> Dict[str, Any]:
         """Script 2: Enhanced semantic tokenization using spaCy for comprehensive analysis"""
+        
+        # DYNAMIC SEGMENTATION CONFIGURATION
+        # Adjust these parameters to fine-tune segmentation behavior
+        SEGMENTATION_CONFIG = {
+            "target_words_per_segment": 150,  # Optimal for LLM processing
+            "target_chars_per_segment": 1000,  # Backup measure for dense content
+            "min_segments": 4,  # Minimum segments for any transcript
+            "max_segments": 50,  # Maximum to prevent excessive API calls
+            "quality_threshold": 50,  # Minimum words per segment for quality
+        }
+        
         # Robust extraction of transcript text with fallback options
         full_transcript = ""
         
@@ -214,23 +229,112 @@ class PipelineService:
         if not full_transcript or full_transcript.strip() == "":
             raise ValueError("No transcript content found to process")
         
-        logger.info(f"Processing transcript with {len(full_transcript)} characters")
+        # DEBUG: Print word count and transcript info
+        word_count = len(full_transcript.split())
+        print(f"=== TRANSCRIPT DEBUG INFO ===")
+        print(f"Total character count: {len(full_transcript)}")
+        print(f"Total word count: {word_count}")
+        print(f"First 200 characters: {full_transcript[:200]}...")
+        print(f"Last 200 characters: ...{full_transcript[-200:]}")
+        print(f"=== END TRANSCRIPT DEBUG ===")
+        
+        logger.info(f"Processing transcript with {len(full_transcript)} characters and {word_count} words")
         
         # Enhanced segmentation for longer meetings - create more granular segments
         # for better detail extraction while maintaining manageable chunk sizes
-        n_segments = 12  # Increased from 6 to capture more detail from long meetings
+        # DYNAMIC SEGMENTATION based on transcript size for better accuracy
+        
+        # Calculate optimal number of segments based on transcript characteristics
+        target_words_per_segment = SEGMENTATION_CONFIG["target_words_per_segment"]
+        target_chars_per_segment = SEGMENTATION_CONFIG["target_chars_per_segment"]
+        min_segments = SEGMENTATION_CONFIG["min_segments"]
+        max_segments = SEGMENTATION_CONFIG["max_segments"]
+        
+        # Calculate segments based on word count
+        segments_by_words = max(min_segments, min(max_segments, word_count // target_words_per_segment))
+        
+        # Also consider character count for very dense content
+        segments_by_chars = max(min_segments, min(max_segments, len(full_transcript) // target_chars_per_segment))
+        
+        # Use the higher value to ensure detailed analysis
+        n_segments = max(segments_by_words, segments_by_chars)
+        
+        # Ensure we have at least minimum segments
+        n_segments = max(min_segments, n_segments)
+        
+        # DEBUG: Show dynamic segmentation calculation
+        print(f"=== DYNAMIC SEGMENTATION CALCULATION ===")
+        print(f"Total words: {word_count}")
+        print(f"Total characters: {len(full_transcript)}")
+        print(f"Target words per segment: {target_words_per_segment}")
+        print(f"Target chars per segment: {target_chars_per_segment}")
+        print(f"Min segments: {min_segments}, Max segments: {max_segments}")
+        print(f"Segments by words: {segments_by_words}")
+        print(f"Segments by chars: {segments_by_chars}")
+        print(f"Final n_segments (dynamic): {n_segments}")
+        print(f"Expected words per segment: {word_count // n_segments if n_segments > 0 else 0}")
+        print(f"Expected chars per segment: {len(full_transcript) // n_segments if n_segments > 0 else 0}")
+        print(f"=== END DYNAMIC SEGMENTATION ===")
         doc = self.nlp(full_transcript)
         sentences = [sent.text.strip() for sent in doc.sents if sent.text.strip()]
         total_sentences = len(sentences)
         seg_size = total_sentences // n_segments
         
-        transcriptions = []
+        # DEBUG: Print segmentation info
+        print(f"=== SEGMENTATION DEBUG INFO ===")
+        print(f"Total sentences found: {total_sentences}")
+        print(f"Number of segments to create (DYNAMIC): {n_segments}")
+        print(f"Sentences per segment: {seg_size}")
+        print(f"Remaining sentences for last segment: {total_sentences - (seg_size * (n_segments - 1))}")
+        print(f"Segmentation is now DYNAMIC based on transcript size!")
+        print(f"=== END SEGMENTATION DEBUG ===")
+        
+        # Create initial segments
+        initial_segments = []
         for i in range(n_segments):
             start = i * seg_size
             end = (i + 1) * seg_size if i < n_segments - 1 else total_sentences
             segment = " ".join(sentences[start:end]).strip()
             if segment:
-                transcriptions.append(segment)
+                initial_segments.append(segment)
+        
+        # Filter out empty segments and apply quality control
+        quality_threshold = SEGMENTATION_CONFIG["quality_threshold"]
+        transcriptions = []
+        low_quality_segments = []
+        
+        for i, seg in enumerate(initial_segments):
+            if seg.strip():
+                segment_word_count = len(seg.split())
+                if segment_word_count >= quality_threshold:
+                    transcriptions.append(seg)
+                    # DEBUG: Print segment info
+                    print(f"Segment {len(transcriptions)}: {segment_word_count} words, {len(seg)} characters")
+                else:
+                    low_quality_segments.append((i+1, segment_word_count))
+        
+        # If we have low quality segments, try to merge them with adjacent segments
+        if low_quality_segments:
+            print(f"WARNING: {len(low_quality_segments)} segments below quality threshold ({quality_threshold} words)")
+            for seg_num, word_count in low_quality_segments:
+                print(f"  Segment {seg_num}: {word_count} words")
+        
+        # If we have too few segments after filtering, adjust
+        if len(transcriptions) < min_segments:
+            print(f"WARNING: Only {len(transcriptions)} segments created, less than minimum {min_segments}")
+            print("This might happen with very short transcripts")
+        
+        # DEBUG: Print final segment statistics
+        print(f"=== FINAL SEGMENT STATS ===")
+        print(f"Total segments created: {len(transcriptions)}")
+        total_segment_words = sum(len(seg.split()) for seg in transcriptions)
+        print(f"Total words in all segments: {total_segment_words}")
+        print(f"Word count difference: {word_count - total_segment_words}")
+        print(f"Average words per segment: {total_segment_words // len(transcriptions) if transcriptions else 0}")
+        print(f"Average characters per segment: {sum(len(seg) for seg in transcriptions) // len(transcriptions) if transcriptions else 0}")
+        print(f"Segments above quality threshold: {len(transcriptions)}")
+        print(f"Low quality segments filtered out: {len(low_quality_segments)}")
+        print(f"=== END SEGMENT STATS ===")
         
         # Extract enhanced semantic tokens from each segment
         semantic_tokens = []
@@ -611,7 +715,7 @@ class PipelineService:
         """
         
         try:
-            model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
+            model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
             response = self.openai_client.chat.completions.create(
                 model=model_name,
                 messages=[
@@ -619,11 +723,15 @@ class PipelineService:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,  # Lower temperature for more consistent, focused analysis
-                max_tokens=4000
+                max_tokens=4000   # Adjusted for gpt-4o-mini - reduced from 8000 to 4000
             )
+            
+            analysis_content = response.choices[0].message.content or ""
+            logger.info(f"Segment {segment['segment_id']} analysis length: {len(analysis_content)} characters")
+            
             return {
                 "segment_id": segment["segment_id"],
-                "analysis": response.choices[0].message.content,
+                "analysis": analysis_content,
                 "entities": segment["entities"],
                 "action_items": segment["action_items"],
                 "people": segment["people"],
@@ -634,8 +742,9 @@ class PipelineService:
             logger.error(f"Error analyzing segment {segment['segment_id']}: {e}")
             raise
 
-    def _handle_large_response(self, response_text: str, max_tokens_per_chunk: int = 200) -> str:
+    def _handle_large_response(self, response_text: str, max_tokens_per_chunk: int = 100000) -> str:
         """Handle large responses by splitting into manageable chunks"""
+        # Increased limit from 200 to 100,000 characters to accommodate large responses
         if len(response_text) <= max_tokens_per_chunk:
             return response_text
         
@@ -650,7 +759,7 @@ class PipelineService:
             logger.info(f"Extracted JSON chunk of {len(extracted_json)} characters")
             return extracted_json
         
-        # If no clear JSON boundaries, return the first chunk
+        # If no clear JSON boundaries, return a larger chunk
         logger.warning("No clear JSON boundaries found, returning first chunk")
         return response_text[:max_tokens_per_chunk]
 
@@ -990,7 +1099,7 @@ EXTRACTED INFORMATION:
         for attempt in range(max_retries + 1):
             try:
                 logger.info(f"Generating ROCKS from segment analyses (attempt {attempt + 1}/{max_retries + 1})...")
-                model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
+                model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")  # Changed from gpt-4o to gpt-4o-mini
                 response = self.openai_client.chat.completions.create(
                     model=model_name,
                     messages=[
@@ -998,15 +1107,31 @@ EXTRACTED INFORMATION:
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.2,
-                    max_tokens=16000
+                    max_tokens=16000  # Adjusted to 16000 for gpt-4o-mini (max limit is ~16,384)
                 )
                 response_content = response.choices[0].message.content or ""
-                json_response = self._handle_large_response(response_content.strip())
+                logger.info(f"Raw response length: {len(response_content)} characters")
+                
+                # Only call _handle_large_response if the response is actually problematic
+                if len(response_content) > 90000:  # Only truncate if extremely large
+                    logger.warning(f"Response is extremely large ({len(response_content)} chars), extracting JSON...")
+                    json_response = self._handle_large_response(response_content.strip())
+                else:
+                    logger.info(f"Response size is acceptable ({len(response_content)} chars), using full response")
+                    json_response = response_content.strip()
+                
                 # Clean up response
                 json_response = re.sub(r"^```(?:json)?\s*", "", json_response)
                 json_response = re.sub(r"\s*```$", "", json_response)
                 json_response = re.sub(r',([ \t\r\n]*[\]}])', r'\1', json_response)
                 logger.info("Raw JSON response received")
+                
+                # DEBUG: Print JSON structure info
+                logger.info(f"JSON response length after cleanup: {len(json_response)} characters")
+                logger.info(f"JSON response first 500 chars: {json_response[:500]}...")
+                if len(json_response) > 1000:
+                    logger.info(f"JSON response last 500 chars: ...{json_response[-500:]}")
+                
                 # Parse and validate JSON - try standard json first, then demjson3 as fallback
                 rocks_data = None
                 json_error = None
@@ -1014,6 +1139,19 @@ EXTRACTED INFORMATION:
                 try:
                     rocks_data = json.loads(json_response)
                     logger.info("JSON parsed successfully with standard json module")
+                    
+                    # DEBUG: Log the structure we got
+                    logger.info(f"Parsed JSON keys: {list(rocks_data.keys()) if isinstance(rocks_data, dict) else 'Not a dict'}")
+                    if isinstance(rocks_data, dict):
+                        if "rocks" in rocks_data:
+                            logger.info(f"Number of rocks found: {len(rocks_data['rocks'])}")
+                        if "todos" in rocks_data:
+                            logger.info(f"Number of todos found: {len(rocks_data['todos'])}")
+                        if "issues" in rocks_data:
+                            logger.info(f"Number of issues found: {len(rocks_data['issues'])}")
+                        if "runtime_solutions" in rocks_data:
+                            logger.info(f"Number of runtime solutions found: {len(rocks_data['runtime_solutions'])}")
+                    
                 except json.JSONDecodeError as e:
                     json_error = e
                     logger.warning(f"Standard JSON parsing failed, trying demjson3: {e}")
@@ -1208,6 +1346,16 @@ EXTRACTED INFORMATION:
             # Validate content quality before processing
             transcript_text = transcript_text.strip()
             word_count = len(transcript_text.split())
+            
+            # DEBUG: Print detailed transcript info before processing
+            print(f"=== PIPELINE TRANSCRIPT DEBUG ===")
+            print(f"Original transcript_json type: {type(transcript_json)}")
+            print(f"Original transcript_json keys: {list(transcript_json.keys()) if isinstance(transcript_json, dict) else 'Not a dict'}")
+            print(f"Extracted transcript_text length: {len(transcript_text)} characters")
+            print(f"Extracted transcript_text word count: {word_count}")
+            print(f"First 300 chars of transcript_text: {transcript_text[:300]}...")
+            print(f"Last 300 chars of transcript_text: ...{transcript_text[-300:]}")
+            print(f"=== END PIPELINE TRANSCRIPT DEBUG ===")
             
             logger.info(f"Transcript content validation: {word_count} words, length: {len(transcript_text)} chars")
             
