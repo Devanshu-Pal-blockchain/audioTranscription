@@ -63,9 +63,9 @@ async def chat_with_bot(
     
     # Check authorization for context-based queries
     if request.context_type and request.context_id:
-        # For non-admin users, we might want to check if they have access to the specific item
+        # For non-facilitator users, we might want to check if they have access to the specific item
         # This is a simplified check - you can enhance based on your access control needs
-        if current_user.employee_role != "admin":
+        if current_user.employee_role != "facilitator":
             # Add access control logic here if needed
             # For now, we'll allow all authenticated users to access any context
             pass

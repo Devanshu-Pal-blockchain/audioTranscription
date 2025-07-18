@@ -246,3 +246,25 @@ class RockService(BaseService):
             )
             updated_tasks.append(task)
         return updated_rock, updated_tasks 
+    
+    @staticmethod
+    async def update_rock_field(rock_id: UUID, field: str, value) -> Optional[Rock]:
+        """Update a specific field of a rock"""
+        if field not in ["status", "assigned_to_id", "assigned_to_name", "rock_name", "smart_objective"]:
+            return None
+            
+        update_data = {field: value, "updated_at": datetime.utcnow()}
+        
+        # Encrypt the update data
+        encrypted = encrypt_dict(update_data.copy(), RockService.EXCLUDE_FIELDS)
+        
+        result = await RockService.collection.find_one_and_update(
+            {"id": rock_id},
+            {"$set": encrypted},
+            return_document=True
+        )
+        
+        if result:
+            decrypted_data = RockService.safe_decrypt_dict(result)
+            return Rock(**decrypted_data)
+        return None 

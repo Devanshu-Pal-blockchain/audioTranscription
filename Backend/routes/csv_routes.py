@@ -7,14 +7,14 @@ import pandas as pd
 import io
 from service.user_service import UserService
 from models.user import User
-from service.auth_service import admin_required
+from service.auth_service import facilitator_required
 
 router = APIRouter()
 
 @router.post("/upload")
 async def upload_csv(
     file: UploadFile = File(...),
-    current_admin = Depends(admin_required)
+    current_facilitator = Depends(facilitator_required)
 ):
     """
     Upload CSV file and create users in the users collection. Validates required fields.
@@ -44,11 +44,11 @@ async def upload_csv(
                 return ''.join(secrets.choice(alphabet) for _ in range(length))
             row["employee_password"] = generate_password()
 
-            # Normalize employee_role: only 'admin' or 'employee' allowed
-            if row.get("employee_role", "").lower() != "admin":
+            # Normalize employee_role: only 'facilitator' or 'employee' allowed
+            if row.get("employee_role", "").lower() != "facilitator":
                 row["employee_role"] = "employee"
             else:
-                row["employee_role"] = "admin"
+                row["employee_role"] = "facilitator"
 
             # assigned_rocks is optional
             if "assigned_rocks" in row and row["assigned_rocks"]:

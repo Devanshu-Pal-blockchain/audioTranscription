@@ -60,10 +60,10 @@ Both collections follow the same patterns as existing collections (rocks, tasks,
 | GET | `/users/{user_id}/todos` | Get todos by user | Yes |
 | GET | `/todos?status={status}&quarter_id={id}` | Get todos by status | Yes |
 | PUT | `/todos/{todo_id}` | Update todo | Yes |
-| DELETE | `/todos/{todo_id}` | Delete todo | Admin only |
+| DELETE | `/todos/{todo_id}` | Delete todo | Facilitator only |
 | GET | `/todos/overdue` | Get overdue todos | Yes |
 | GET | `/todos/due-soon?days=7` | Get todos due soon | Yes |
-| GET | `/todos/statistics?quarter_id={id}` | Get todo statistics | Admin only |
+| GET | `/todos/statistics?quarter_id={id}` | Get todo statistics | Facilitator only |
 
 ### Issues API (`/issues`)
 
@@ -77,8 +77,8 @@ Both collections follow the same patterns as existing collections (rocks, tasks,
 | GET | `/issues/solution-type/{type}?quarter_id={id}` | Get issues by solution type | Yes |
 | GET | `/issues/search?q={query}&quarter_id={id}` | Search issues | Yes |
 | PUT | `/issues/{issue_id}` | Update issue | Yes |
-| DELETE | `/issues/{issue_id}` | Delete issue | Admin only |
-| GET | `/issues/statistics?quarter_id={id}` | Get issue statistics | Admin only |
+| DELETE | `/issues/{issue_id}` | Delete issue | Facilitator only |
+| GET | `/issues/statistics?quarter_id={id}` | Get issue statistics | Facilitator only |
 
 ## Pipeline Integration
 
@@ -112,15 +112,15 @@ Backend/
 
 ### Todos
 - **Create**: Any authenticated user
-- **Read**: Users can see their own todos + admins see all
-- **Update**: Users can update their own todos + admins can update any
-- **Delete**: Admin only
+- **Read**: Users can see their own todos + Facilitators see all
+- **Update**: Users can update their own todos + Facilitators can update any
+- **Delete**: Facilitator only
 
 ### Issues
 - **Create**: Any authenticated user
 - **Read**: All authenticated users can see all issues
-- **Update**: Issue raiser + admins can update
-- **Delete**: Admin only
+- **Update**: Issue raiser + Facilitators can update
+- **Delete**: Facilitator only
 
 ## Usage Examples
 
@@ -164,7 +164,7 @@ GET /issues/statistics?quarter_id=uuid-here
 ## Integration with Existing Code
 
 - **Consistent patterns**: Follows same UUID-based primary keys, async functions, and error handling as existing collections
-- **Authentication**: Uses same auth system (`get_current_user`, `admin_required`)
+- **Authentication**: Uses same auth system (`get_current_user`, `Facilitator_required`)
 - **Database**: Uses same base service pattern with MongoDB collections
 - **Pipeline**: Integrates seamlessly with existing pipeline processing
 - **API structure**: Follows same RESTful conventions as rocks/tasks APIs

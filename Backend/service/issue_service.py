@@ -119,8 +119,24 @@ class IssueService(BaseService):
 
     @staticmethod
     async def update_issue(issue_id: UUID, update_data: Dict) -> Optional[Issue]:
-        update_data["updated_at"] = datetime.utcnow()
-        encrypted = encrypt_dict(update_data.copy(), IssueService.EXCLUDE_FIELDS)
+        # First, get the existing issue to preserve all data
+        existing_issue = await IssueService.get_issue(issue_id)
+        if not existing_issue:
+            return None
+        
+        # Convert existing issue to dict and merge with update data
+        existing_data = existing_issue.model_dump()
+        
+        # Handle date serialization properly for any date fields
+        for key, value in existing_data.items():
+            if hasattr(value, "isoformat"):
+                existing_data[key] = value.isoformat()
+        
+        existing_data.update(update_data)
+        existing_data["updated_at"] = datetime.utcnow()
+        
+        # Re-encrypt the complete data
+        encrypted = encrypt_dict(existing_data.copy(), IssueService.EXCLUDE_FIELDS)
         result = await IssueService.issues.update_one(
             {"issue_id": str(issue_id)},
             {"$set": encrypted}

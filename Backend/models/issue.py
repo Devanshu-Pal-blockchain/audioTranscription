@@ -28,7 +28,7 @@ class Issue(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     issue_id: UUID = Field(default_factory=uuid4)
     issue_title: str = Field(min_length=1, description="Title of the issue")
-    description: str = Field(min_length=1, description="Detailed description of the issue")
+    description: str = Field(default="", description="Detailed description of the issue")
     raised_by: str = Field(min_length=1, description="Full name of the person who raised the issue")
     discussion_notes: Optional[str] = Field(default=None, description="Key discussion points about the issue")
     linked_solution_type: Optional[str] = Field(default=None, description="Type of solution: rock, todo, or runtime_solution")

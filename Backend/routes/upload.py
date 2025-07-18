@@ -11,7 +11,7 @@ from fastapi.security import OAuth2PasswordBearer
 from typing import Optional
 from dotenv import load_dotenv
 from models.user import User
-from service.auth_service import admin_required
+from service.auth_service import facilitator_required
 from service.script_pipeline_service import run_pipeline_for_audio, PipelineService, run_pipeline_for_transcript
 from service.data_parser_service import parse_pipeline_response_to_files
 from service.meeting_json_service import save_raw_context_json
@@ -29,7 +29,7 @@ async def upload_transcript(
     quarterWeeks: Optional[str] = Form(None),
     id: Optional[str] = Form(None),
     participants: Optional[str] = Form(None),
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ):
     """
     Upload a transcript file (JSON, PDF, Word, Excel, or text), parse it, save to the raw context collection, and run the pipeline from step 2.
@@ -146,7 +146,7 @@ async def upload_transcript(
                 num_weeks=num_weeks,
                 quarter_id=quarter_id,
                 participants=participant_info,
-                admin_id=str(current_user.employee_id)
+                facilitator_id=str(current_user.employee_id)
             )
             if "error" in result:
                 print(f"Pipeline (from transcript) failed: {result['error']}")
@@ -167,13 +167,13 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-# Dependency to check admin role
-async def admin_required(token: str = Depends(oauth2_scheme)):
+# Dependency to check facilitator role
+async def facilitator_required_local(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         role = payload.get("role")
-        if role != "admin":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only.")
+        if role != "facilitator":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Facilitators only.")
         return payload
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.")
@@ -202,7 +202,7 @@ async def upload_audio(
     quarter_id_form: Optional[str] = Form(None),
     created_at: Optional[str] = Form(None),
     updated_at: Optional[str] = Form(None),
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ):
     """
     Upload and process audio file to generate rocks and tasks
@@ -210,7 +210,7 @@ async def upload_audio(
     Args:
         file: Audio file to process
         quarter_id: Optional quarter ID to associate rocks with
-        current_user: Current authenticated admin user
+        current_user: Current authenticated facilitator user
         
     Returns:
         Dict with upload status and pipeline information
@@ -289,7 +289,7 @@ async def upload_audio(
                 num_weeks=num_weeks, 
                 quarter_id=quarter_id,
                 participants=participant_info,
-                admin_id=str(current_user['sub'])
+                facilitator_id=str(current_user['sub'])
             )
             
             if "error" in result:

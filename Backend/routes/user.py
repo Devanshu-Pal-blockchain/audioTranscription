@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from models.user import User
 from service.user_service import UserService
-from service.auth_service import get_current_user, admin_required
+from service.auth_service import get_current_user, facilitator_required
 from service.quarter_service import QuarterService
 from service.rock_service import RockService
 from service.task_service import TaskService
@@ -13,9 +13,9 @@ router = APIRouter()
 @router.post("/users", response_model=User)
 async def create_user(
     user: User,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> User:
-    """Create a new user (admin only)"""
+    """Create a new user (facilitator only)"""
     created_user = await UserService.create_user(user)
     if not created_user:
         raise HTTPException(
@@ -38,7 +38,7 @@ async def get_user(
 ) -> User:
     """Get a user by ID"""
     # Regular users can only view their own profile
-    if current_user.employee_role != "admin" and current_user.employee_id != user_id:
+    if current_user.employee_role != "facilitator" and current_user.employee_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own profile"
@@ -54,9 +54,9 @@ async def get_user(
 @router.get("/users", response_model=List[User])
 async def list_users(
     role: Optional[str] = None,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> List[User]:
-    """List all users, optionally filtered by role (admin only)"""
+    """List all users, optionally filtered by role (facilitator only)"""
     return await UserService.get_users(role)
 
 @router.put("/users/{user_id}", response_model=User)
@@ -67,13 +67,13 @@ async def update_user(
 ) -> User:
     """Update a user"""
     # Regular users can only update their own profile
-    if current_user.employee_role != "admin" and current_user.employee_id != user_id:
+    if current_user.employee_role != "facilitator" and current_user.employee_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only update your own profile"
         )
-    # Only admins can change roles
-    if (current_user.employee_role != "admin" and 
+    # Only facilitators can change roles
+    if (current_user.employee_role != "facilitator" and 
         user_update.employee_role != current_user.employee_role):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -100,7 +100,7 @@ async def update_password(
 ) -> dict:
     """Update a user's password"""
     # Regular users can only update their own password
-    if current_user.employee_role != "admin" and current_user.employee_id != user_id:
+    if current_user.employee_role != "facilitator" and current_user.employee_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only update your own password"
@@ -116,9 +116,9 @@ async def update_password(
 @router.delete("/users/{user_id}")
 async def delete_user(
     user_id: UUID,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> dict:
-    """Delete a user (admin only)"""
+    """Delete a user (facilitator only)"""
     # Prevent self-deletion
     if current_user.employee_id == user_id:
         raise HTTPException(
@@ -142,7 +142,7 @@ async def get_user_dashboard(
 ) -> Dict:
     """Get user's dashboard data including quarters, rocks, and tasks"""
     # Regular users can only view their own dashboard
-    if current_user.employee_role != "admin" and current_user.employee_id != user_id:
+    if current_user.employee_role != "facilitator" and current_user.employee_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own dashboard"
@@ -170,7 +170,7 @@ async def get_user_dashboard(
             
         # Get rocks for this quarter
         rocks = await RockService.get_rocks_by_quarter(quarter.quarter_id)
-        if current_user.employee_role != "admin":
+        if current_user.employee_role != "facilitator":
             rocks = [rock for rock in rocks if str(rock.assigned_to_id) == str(user_id)]
         
         # Get tasks for each rock
@@ -208,7 +208,7 @@ async def get_user_current_quarter(
 ) -> Dict:
     """Get user's current quarter data"""
     # Regular users can only view their own data
-    if current_user.employee_role != "admin" and current_user.employee_id != user_id:
+    if current_user.employee_role != "facilitator" and current_user.employee_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own data"
@@ -238,7 +238,7 @@ async def get_user_current_quarter(
     
     # Get rocks for current quarter
     rocks = await RockService.get_rocks_by_quarter(current_quarter.quarter_id)
-    if current_user.employee_role != "admin":
+    if current_user.employee_role != "facilitator":
         rocks = [rock for rock in rocks if str(rock.assigned_to_id) == str(user_id)]
     
     # Get tasks for each rock
@@ -270,7 +270,7 @@ async def get_user_week_tasks(
 ) -> Dict:
     """Get user's tasks for a specific week"""
     # Regular users can only view their own data
-    if current_user.employee_role != "admin" and current_user.employee_id != user_id:
+    if current_user.employee_role != "facilitator" and current_user.employee_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own data"
@@ -307,7 +307,7 @@ async def get_user_week_tasks(
     
     # Get rocks for current quarter
     rocks = await RockService.get_rocks_by_quarter(current_quarter.quarter_id)
-    if current_user.employee_role != "admin":
+    if current_user.employee_role != "facilitator":
         rocks = [rock for rock in rocks if str(rock.assigned_to_id) == str(user_id)]
     
     # Get tasks for each rock for the specified week
@@ -344,7 +344,7 @@ async def get_user_rocks_with_tasks(
 ) -> Dict:
     """Get all rocks assigned to a user with their tasks"""
     # Regular users can only view their own data
-    if current_user.employee_role != "admin" and current_user.employee_id != user_id:
+    if current_user.employee_role != "facilitator" and current_user.employee_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own data"

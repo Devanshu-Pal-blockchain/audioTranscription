@@ -59,7 +59,7 @@ def chunk_csv_context(csv_data):
         chunks.append(row_str)
     return chunks
 
-# Index JSON chunks in Qdrant (per admin/context)
+# Index JSON chunks in Qdrant (per facilitator/context)
 def index_json_chunks(json_data, collection_name, context_type=None):
     # Remove old collection if exists
     if collection_name in [c.name for c in qdrant_client.get_collections().collections]:
@@ -78,7 +78,7 @@ def index_json_chunks(json_data, collection_name, context_type=None):
     ]
     qdrant_client.upsert(collection_name=collection_name, points=points)
 
-# Index CSV chunks in Qdrant (per admin/context)
+# Index CSV chunks in Qdrant (per facilitator/context)
 def index_csv_chunks(csv_data, collection_name):
     if collection_name in [c.name for c in qdrant_client.get_collections().collections]:
         qdrant_client.delete_collection(collection_name=collection_name)
@@ -97,12 +97,12 @@ def index_csv_chunks(csv_data, collection_name):
     qdrant_client.upsert(collection_name=collection_name, points=points)
 
 # RAG+LLM answer: always use Qdrant for context retrieval
-def rag_llm_answer(question, admin_id, top_k=5):
+def rag_llm_answer(question, facilitator_id, top_k=5):
     # Retrieve top-k relevant chunks from each context type using Qdrant
     context_chunks = {"raw": [], "structured": [], "csv": []}
     import re
     for context_type in ["raw", "structured", "csv"]:
-        collection_name = f"{context_type}_{admin_id}"
+        collection_name = f"{context_type}_{facilitator_id}"
         if collection_name in [c.name for c in qdrant_client.get_collections().collections]:
             question_emb = embedding_model.encode([question])[0]
             # Advanced filtering for all context types

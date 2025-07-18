@@ -53,7 +53,7 @@ def test_pipeline_service():
         from service.script_pipeline_service import PipelineService
         
         # Create pipeline instance
-        pipeline = PipelineService("test_admin")
+        pipeline = PipelineService("test_facilitator")
         
         # Check if transcribe_audio method exists
         assert hasattr(pipeline, 'transcribe_audio'), "transcribe_audio method should exist"

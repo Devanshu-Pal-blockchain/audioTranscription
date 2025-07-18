@@ -175,7 +175,7 @@ class CombinedService:
         include_comments: bool = False,
         include_users: bool = True
     ) -> Dict:
-        """Get all data for a quarter including rocks, tasks, and users (admin only)"""
+        """Get all data for a quarter including rocks, tasks, and users (facilitator only)"""
         rocks_with_data = []
         rocks = await RockService.get_rocks_by_quarter(quarter_id)
         
@@ -228,7 +228,7 @@ class CombinedService:
         # Verify rock belongs to quarter
         rock = await RockService.get_rock_by_quarter(quarter_id, rock_id)
         if not rock:
-            raise HTTPException(status_code=404, detail="Rock not found in quarter")
+            raise HTTPException(status_code=401, detail="Unauthorized: Facilitator required")
 
         # Update rock
         updated_rock = await RockService.update_rock(rock_id, rock_update)
@@ -346,11 +346,11 @@ class CombinedService:
     async def get_quarter_data_for_user(
         quarter_id: UUID,
         user_id: UUID,
-        is_admin: bool,
+        is_facilitator: bool,
         include_comments: bool = False
     ) -> Dict:
         """Get quarter data based on user role"""
-        if is_admin:
+        if is_facilitator:
             return await CombinedService.get_quarter_data(quarter_id, include_comments)
         
         # For regular users, only get their assigned rocks and tasks
@@ -388,7 +388,7 @@ class CombinedService:
     async def get_rock_data_for_user(
         rock_id: UUID,
         user_id: UUID,
-        is_admin: bool,
+        is_facilitator: bool,
         include_comments: bool = False
     ) -> Optional[Dict]:
         """Get rock data based on user role"""
@@ -396,7 +396,7 @@ class CombinedService:
         if not rock:
             return None
             
-        if not is_admin and str(rock.assigned_to_id) != str(user_id):
+        if not is_facilitator and str(rock.assigned_to_id) != str(user_id):
             raise HTTPException(
                 status_code=403,
                 detail="Not authorized to access this rock"
@@ -405,95 +405,95 @@ class CombinedService:
         return await CombinedService.get_rock_tasks(rock_id, include_comments)
 
     @staticmethod
-    async def add_admin_comment(
+    async def add_facilitator_comment(
         task_id: UUID,
-        admin_id: UUID,
+        facilitator_id: UUID,
         content: str
     ) -> Optional[Task]:
-        """Add an admin comment to a task"""
-        # Verify admin user
-        admin = await UserService.get_user(admin_id)
-        if not admin or admin.employee_role != "admin":
+        """Add an facilitator comment to a task"""
+        # Verify facilitator user
+        facilitator = await UserService.get_user(facilitator_id)
+        if not facilitator or facilitator.employee_role != "facilitator":
             raise HTTPException(
                 status_code=403,
-                detail="Only admins can add comments"
+                detail="Only facilitators can add comments"
             )
         
         comment = {
             "comment_id": str(UUID()),
-            "commented_by": str(admin_id),
+            "commented_by": str(facilitator_id),
             "content": content,
             "created_at": datetime.utcnow(),
-            "is_admin_comment": True
+            "is_facilitator_comment": True
         }
         
         return await TaskService.add_comment(task_id, comment)
 
     @staticmethod
-    async def update_admin_comment(
+    async def update_facilitator_comment(
         task_id: UUID,
         comment_id: UUID,
-        admin_id: UUID,
+        facilitator_id: UUID,
         content: str
     ) -> Optional[Task]:
-        """Update an admin comment on a task"""
-        # Verify admin user
-        admin = await UserService.get_user(admin_id)
-        if not admin or admin.employee_role != "admin":
+        """Update an facilitator comment on a task"""
+        # Verify facilitator user
+        facilitator = await UserService.get_user(facilitator_id)
+        if not facilitator or facilitator.employee_role != "facilitator":
             raise HTTPException(
                 status_code=403,
-                detail="Only admins can update comments"
+                detail="Only facilitators can update comments"
             )
         
         task = await TaskService.get_task(task_id)
         if not task:
             return None
             
-        # Verify comment exists and belongs to admin
+        # Verify comment exists and belongs to facilitator
         comment_exists = False
         for comment in task.comments:
-            if str(comment.comment_id) == str(comment_id) and comment.is_admin_comment:
+            if str(comment.comment_id) == str(comment_id) and comment.is_facilitator_comment:
                 comment_exists = True
                 break
                 
         if not comment_exists:
             raise HTTPException(
                 status_code=404,
-                detail="Admin comment not found"
+                detail="facilitator comment not found"
             )
         
         return await TaskService.update_comment(task_id, comment_id, content)
 
     @staticmethod
-    async def delete_admin_comment(
+    async def delete_facilitator_comment(
         task_id: UUID,
         comment_id: UUID,
-        admin_id: UUID
+        facilitator_id: UUID
     ) -> Optional[Task]:
-        """Delete an admin comment from a task"""
-        # Verify admin user
-        admin = await UserService.get_user(admin_id)
-        if not admin or admin.employee_role != "admin":
+        """Delete an facilitator comment from a task"""
+        # Verify facilitator user
+        facilitator = await UserService.get_user(facilitator_id)
+        if not facilitator or facilitator.employee_role != "facilitator":
             raise HTTPException(
                 status_code=403,
-                detail="Only admins can delete comments"
+                detail="Only facilitators can delete comments"
             )
         
         task = await TaskService.get_task(task_id)
         if not task:
             return None
             
-        # Verify comment exists and belongs to admin
+        # Verify comment exists and belongs to facilitator
         comment_exists = False
         for comment in task.comments:
-            if str(comment.comment_id) == str(comment_id) and comment.is_admin_comment:
+            if str(comment.comment_id) == str(comment_id) and comment.is_facilitator_comment:
                 comment_exists = True
                 break
                 
         if not comment_exists:
             raise HTTPException(
                 status_code=404,
-                detail="Admin comment not found"
+                detail="facilitator comment not found"
             )
         
         return await TaskService.remove_comment(task_id, comment_id) 

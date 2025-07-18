@@ -1,7 +1,7 @@
 import os
 import json
 from cryptography.fernet import Fernet, InvalidToken
-from datetime import datetime
+from datetime import datetime, date
 from uuid import UUID
 from typing import Dict, Any, List
 
@@ -30,7 +30,7 @@ REQUIRED_FIELDS = {
 }
 
 def _serialize_excluded(fields: Dict[str, Any]) -> Dict[str, Any]:
-    # Convert UUID and datetime fields to string for storage
+    # Convert UUID, datetime, and date fields to string for storage
     result = {}
     for k, v in fields.items():
         if isinstance(v, UUID):
@@ -38,6 +38,8 @@ def _serialize_excluded(fields: Dict[str, Any]) -> Dict[str, Any]:
         elif isinstance(v, list) and v and isinstance(v[0], UUID):
             result[k] = [str(x) for x in v]
         elif isinstance(v, datetime):
+            result[k] = v.isoformat()
+        elif isinstance(v, date):
             result[k] = v.isoformat()
         else:
             result[k] = v
@@ -82,7 +84,20 @@ def _deserialize_excluded(fields: Dict[str, Any], types: Dict[str, Any]) -> Dict
 def encrypt_dict(data: Dict[str, Any], exclude_fields: List[str]) -> Dict[str, Any]:
     # Split out excluded fields
     excluded = {k: data.pop(k) for k in exclude_fields if k in data}
-    encrypted_blob = fernet.encrypt(json.dumps(data).encode()).decode()
+    
+    # Serialize date/datetime objects in the data to be encrypted
+    serialized_data = {}
+    for k, v in data.items():
+        if isinstance(v, UUID):
+            serialized_data[k] = str(v)
+        elif isinstance(v, datetime):
+            serialized_data[k] = v.isoformat()
+        elif isinstance(v, date):
+            serialized_data[k] = v.isoformat()
+        else:
+            serialized_data[k] = v
+    
+    encrypted_blob = fernet.encrypt(json.dumps(serialized_data).encode()).decode()
     return {
         **_serialize_excluded(excluded),
         "data_enc": encrypted_blob

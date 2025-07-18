@@ -9,7 +9,7 @@ from service.rock_service import RockService
 from service.task_service import TaskService
 from service.todo_service import TodoService
 from service.issue_service import IssueService
-from service.auth_service import get_current_user, admin_required
+from service.auth_service import get_current_user, facilitator_required
 from models.user import User
 from pydantic import BaseModel, Field
 
@@ -34,9 +34,9 @@ class StatusUpdate(BaseModel):
 @router.post("/quarters", response_model=Quarter)
 async def create_quarter(
     quarter: Quarter,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Quarter:
-    """Create a new quarter (admin only)"""
+    """Create a new quarter (facilitator only)"""
     return await QuarterService.create_quarter(quarter)
 
 @router.get("/quarters/{quarter_id}", response_model=Quarter)
@@ -66,9 +66,9 @@ async def list_quarters(
 async def update_quarter(
     quarter_id: UUID,
     quarter_update: Quarter,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Quarter:
-    """Update a quarter (admin only)"""
+    """Update a quarter (facilitator only)"""
     quarter = await QuarterService.update_quarter(quarter_id, quarter_update)
     if not quarter:
         raise HTTPException(
@@ -80,9 +80,9 @@ async def update_quarter(
 @router.delete("/quarters/{quarter_id}")
 async def delete_quarter(
     quarter_id: UUID,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> dict:
-    """Delete a quarter and its associated rocks (admin only)"""
+    """Delete a quarter and its associated rocks (facilitator only)"""
     success = await QuarterService.delete_quarter(quarter_id)
     if not success:
         raise HTTPException(
@@ -95,9 +95,9 @@ async def delete_quarter(
 async def update_quarter_weeks(
     quarter_id: UUID,
     update: WeeksUpdate,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Quarter:
-    """Update quarter weeks (admin only)"""
+    """Update quarter weeks (facilitator only)"""
     quarter = await QuarterService.update_quarter_field(quarter_id, "weeks", update.weeks)
     if not quarter:
         raise HTTPException(
@@ -110,9 +110,9 @@ async def update_quarter_weeks(
 async def update_quarter_year(
     quarter_id: UUID,
     update: YearUpdate,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Quarter:
-    """Update quarter year (admin only)"""
+    """Update quarter year (facilitator only)"""
     quarter = await QuarterService.update_quarter_field(quarter_id, "year", update.year)
     if not quarter:
         raise HTTPException(
@@ -125,9 +125,9 @@ async def update_quarter_year(
 async def update_quarter_title(
     quarter_id: UUID,
     update: TitleUpdate,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Quarter:
-    """Update quarter title (admin only)"""
+    """Update quarter title (facilitator only)"""
     quarter = await QuarterService.update_quarter_field(quarter_id, "title", update.title)
     if not quarter:
         raise HTTPException(
@@ -140,9 +140,9 @@ async def update_quarter_title(
 async def update_quarter_description(
     quarter_id: UUID,
     update: DescriptionUpdate,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Quarter:
-    """Update quarter description (admin only)"""
+    """Update quarter description (facilitator only)"""
     quarter = await QuarterService.update_quarter_field(quarter_id, "description", update.description)
     if not quarter:
         raise HTTPException(
@@ -155,9 +155,9 @@ async def update_quarter_description(
 async def update_quarter_status(
     quarter_id: UUID,
     update: StatusUpdate,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Quarter:
-    """Update quarter status (admin only)"""
+    """Update quarter status (facilitator only)"""
     quarter = await QuarterService.update_quarter_field(quarter_id, "status", update.status)
     if not quarter:
         raise HTTPException(
@@ -183,9 +183,9 @@ async def list_quarters_by_status(
 async def add_participant(
     quarter_id: UUID,
     user_id: UUID,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Quarter:
-    """Add a participant to a quarter (admin only)"""
+    """Add a participant to a quarter (facilitator only)"""
     quarter = await QuarterService.add_participant(quarter_id, user_id)
     if not quarter:
         raise HTTPException(
@@ -198,9 +198,9 @@ async def add_participant(
 async def remove_participant(
     quarter_id: UUID,
     user_id: UUID,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Quarter:
-    """Remove a participant from a quarter (admin only)"""
+    """Remove a participant from a quarter (facilitator only)"""
     quarter = await QuarterService.remove_participant(quarter_id, user_id)
     if not quarter:
         raise HTTPException(
@@ -215,8 +215,8 @@ async def get_user_quarters(
     current_user: User = Depends(get_current_user)
 ) -> List[Quarter]:
     """Get all quarters where a user is a participant"""
-    # Users can only view their own quarters unless they're admin
-    if current_user.employee_role != "admin" and current_user.employee_id != user_id:
+    # Users can only view their own quarters unless they're facilitator
+    if current_user.employee_role != "facilitator" and current_user.employee_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own quarters"
@@ -239,7 +239,7 @@ async def get_quarter_with_rocks_and_tasks(
         )
     
     # Get rocks based on user role
-    if current_user.employee_role == "admin":
+    if current_user.employee_role == "facilitator":
         rocks = await RockService.get_rocks_by_quarter(quarter_id)
     else:
         all_rocks = await RockService.get_rocks_by_quarter(quarter_id)
@@ -307,7 +307,7 @@ async def get_quarter_week_data(
         )
     
     # Get rocks based on user role
-    if current_user.employee_role == "admin":
+    if current_user.employee_role == "facilitator":
         rocks = await RockService.get_rocks_by_quarter(quarter_id)
     else:
         all_rocks = await RockService.get_rocks_by_quarter(quarter_id)
@@ -344,8 +344,8 @@ async def get_user_quarters_with_data(
     current_user: User = Depends(get_current_user)
 ) -> Dict:
     """Get all quarters with rocks and tasks for a user"""
-    # Users can only view their own data unless they're admin
-    if current_user.employee_role != "admin" and current_user.employee_id != user_id:
+    # Users can only view their own data unless they're facilitator
+    if current_user.employee_role != "facilitator" and current_user.employee_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own data"
@@ -364,7 +364,7 @@ async def get_user_quarters_with_data(
             continue
             
         # Get rocks for this quarter
-        if current_user.employee_role == "admin":
+        if current_user.employee_role == "facilitator":
             rocks = await RockService.get_rocks_by_quarter(quarter.id)
         else:
             all_rocks = await RockService.get_rocks_by_quarter(quarter.id)
@@ -402,9 +402,9 @@ async def bulk_create_quarter_data(
     quarter_id: UUID,
     rocks: List[Rock],
     tasks_by_rock: Dict[str, List[Task]],
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Dict:
-    """Bulk create rocks and tasks for a quarter (admin only)"""
+    """Bulk create rocks and tasks for a quarter (facilitator only)"""
     # Verify quarter exists
     quarter = await QuarterService.get_quarter(quarter_id)
     if not quarter:

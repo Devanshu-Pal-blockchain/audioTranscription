@@ -46,7 +46,7 @@ def log_step_completion(step_name: str):
     print(f"{step_name} completed")
 
 class PipelineService:
-    def __init__(self, admin_id: str = "default_admin"):
+    def __init__(self, facilitator_id: str = "default_facilitator"):
         # Initialize API clients
         self.groq_client = self._get_groq_client()
         self.openai_client = self._get_openai_client()
@@ -55,7 +55,7 @@ class PipelineService:
         self.nlp = self._get_spacy_model()
         
         # Database settings
-        self.admin_id = admin_id
+        self.facilitator_id = facilitator_id
         
     def _get_groq_client(self):
         """Initialize Groq client for transcription"""
@@ -106,7 +106,7 @@ class PipelineService:
                         return self
                 
                 mock_file = MockFile(data)
-                save_raw_context_json(mock_file, self.admin_id)
+                save_raw_context_json(mock_file, self.facilitator_id)
                 
             elif context_type == "structured":
                 # Create a mock file object for the service function
@@ -122,7 +122,7 @@ class PipelineService:
                         return self
                 
                 mock_file = MockFile(data)
-                save_structured_context_json(mock_file, self.admin_id)
+                save_structured_context_json(mock_file, self.facilitator_id)
             
             return True
                 
@@ -1403,14 +1403,14 @@ EXTRACTED INFORMATION:
             return {"error": str(e), "status": "failed"}
 
 # Convenience function for easy usage
-async def run_pipeline_for_audio(audio_file: str, num_weeks: int, quarter_id: str, participants: list, admin_id: str = "default_admin") -> Dict[str, Any]:
+async def run_pipeline_for_audio(audio_file: str, num_weeks: int, quarter_id: str, participants: list, facilitator_id: str = "default_facilitator") -> Dict[str, Any]:
     """Convenience function to run pipeline for a given audio file"""
-    pipeline = PipelineService(admin_id)
+    pipeline = PipelineService(facilitator_id)
     return await pipeline.run_pipeline(audio_file, num_weeks, quarter_id, participants)
 
-async def run_pipeline_for_transcript(transcript_json: dict, num_weeks: int, quarter_id: str, participants: list, admin_id: str = "default_admin") -> dict:
+async def run_pipeline_for_transcript(transcript_json: dict, num_weeks: int, quarter_id: str, participants: list, facilitator_id: str = "default_facilitator") -> dict:
     """
     Convenience function to run pipeline for a given transcript JSON
     """
-    pipeline = PipelineService(admin_id)
+    pipeline = PipelineService(facilitator_id)
     return await pipeline.run_pipeline_for_transcript(transcript_json, num_weeks, quarter_id, participants)

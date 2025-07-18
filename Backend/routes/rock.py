@@ -5,7 +5,7 @@ from models.rock import Rock, RockPayload
 from models.task import Task
 from service.rock_service import RockService
 from service.task_service import TaskService
-from service.auth_service import get_current_user, admin_required
+from service.auth_service import get_current_user, facilitator_required
 from models.user import User
 from service.edit_milestones_service import process_custom_rock_payload
 
@@ -14,9 +14,9 @@ router = APIRouter()
 @router.post("/rocks", response_model=Rock)
 async def create_rock(
     rock: Rock,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Rock:
-    """Create a new rock (admin only)"""
+    """Create a new rock (facilitator only)"""
     return await RockService.create_rock(rock)
 
 @router.get("/rocks/{rock_id}", response_model=Rock)
@@ -33,7 +33,7 @@ async def get_rock(
         )
     
     # Check access
-    if current_user.employee_role != "admin" and str(rock.assigned_to_id) != str(current_user.employee_id):
+    if current_user.employee_role != "facilitator" and str(rock.assigned_to_id) != str(current_user.employee_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this rock"
@@ -47,7 +47,7 @@ async def list_quarter_rocks(
     current_user: User = Depends(get_current_user)
 ) -> List[Rock]:
     """List all rocks for a specific quarter"""
-    if current_user.employee_role == "admin":
+    if current_user.employee_role == "facilitator":
         return await RockService.get_rocks_by_quarter(quarter_id)
     
     # For regular users, filter by assignment
@@ -60,8 +60,8 @@ async def list_user_rocks(
     current_user: User = Depends(get_current_user)
 ) -> List[Rock]:
     """List all rocks assigned to a specific user"""
-    # Users can only view their own rocks unless they're admin
-    if current_user.employee_role != "admin" and current_user.employee_id != user_id:
+    # Users can only view their own rocks unless they're facilitator
+    if current_user.employee_role != "facilitator" and current_user.employee_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own rocks"
@@ -72,9 +72,9 @@ async def list_user_rocks(
 async def update_rock(
     rock_id: UUID,
     rock_update: Rock,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Rock:
-    """Update a rock (admin only)"""
+    """Update a rock (facilitator only)"""
     rock = await RockService.update_rock(rock_id, rock_update)
     if not rock:
         raise HTTPException(
@@ -86,9 +86,9 @@ async def update_rock(
 @router.delete("/rocks/{rock_id}")
 async def delete_rock(
     rock_id: UUID,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> dict:
-    """Delete a rock (admin only)"""
+    """Delete a rock (facilitator only)"""
     success = await RockService.delete_rock(rock_id)
     if not success:
         raise HTTPException(
@@ -113,7 +113,7 @@ async def get_rock_with_tasks(
         )
     
     # Check access
-    if current_user.employee_role != "admin" and str(rock.assigned_to_id) != str(current_user.employee_id):
+    if current_user.employee_role != "facilitator" and str(rock.assigned_to_id) != str(current_user.employee_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this rock"
@@ -128,9 +128,9 @@ async def get_rock_with_tasks(
 async def create_rock_tasks(
     rock_id: UUID,
     tasks: List[Task],
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Dict:
-    """Create new tasks for a rock (admin only)"""
+    """Create new tasks for a rock (facilitator only)"""
     rock = await RockService.get_rock(rock_id)
     if not rock:
         raise HTTPException(
@@ -152,9 +152,9 @@ async def create_rock_tasks(
 async def update_rock_tasks(
     rock_id: UUID,
     tasks: List[Task],
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Dict:
-    """Replace all tasks for a rock with new tasks (admin only)"""
+    """Replace all tasks for a rock with new tasks (facilitator only)"""
     print(f"🔄 PUT /rocks/{rock_id}/tasks called")
     print(f"📝 Received {len(tasks)} tasks")
     
@@ -237,9 +237,9 @@ async def update_rock_tasks(
 @router.delete("/rocks/{rock_id}/tasks")
 async def delete_rock_tasks(
     rock_id: UUID,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> dict:
-    """Delete all tasks for a rock (admin only)"""
+    """Delete all tasks for a rock (facilitator only)"""
     rock = await RockService.get_rock(rock_id)
     if not rock:
         raise HTTPException(
@@ -263,7 +263,7 @@ async def get_quarter_rocks_with_tasks(
     rocks_with_tasks = []
     
     # Get rocks based on user role
-    if current_user.employee_role == "admin":
+    if current_user.employee_role == "facilitator":
         rocks = await RockService.get_rocks_by_quarter(quarter_id)
     else:
         all_rocks = await RockService.get_rocks_by_quarter(quarter_id)
@@ -287,9 +287,9 @@ async def update_smart_objective(
     quarter_id: UUID,
     rock_id: UUID,
     smart_objective: str,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Rock:
-    """Update a rock's SMART objective (admin only)"""
+    """Update a rock's SMART objective (facilitator only)"""
     rock = await RockService.get_rock_by_quarter(quarter_id, rock_id)
     if not rock:
         raise HTTPException(
@@ -309,9 +309,9 @@ async def update_smart_objective(
 async def bulk_create_rocks_and_tasks(
     rocks: List[Rock],
     tasks_by_rock: Dict[str, List[Task]],
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Dict:
-    """Bulk create rocks and their tasks (admin only)"""
+    """Bulk create rocks and their tasks (facilitator only)"""
     created_rocks = []
     created_tasks = []
     

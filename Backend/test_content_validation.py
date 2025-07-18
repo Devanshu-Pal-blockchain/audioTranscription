@@ -44,7 +44,7 @@ async def test_content_validation():
         }
     ]
     
-    pipeline = PipelineService(admin_id="test_admin")
+    pipeline = PipelineService(facilitator_id="test_facilitator")
     
     for i, test_case in enumerate(test_cases):
         print(f"\n{i+1}. Testing: {test_case['name']}")

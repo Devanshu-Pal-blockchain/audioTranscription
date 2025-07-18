@@ -15,7 +15,7 @@ class Comment(BaseModel):
                 "comment_id": "123e4567-e89b-12d3-a456-426614174000",
                 "commented_by": "John Doe",
                 "content": "Initial research completed for Singapore market",
-                "is_admin_comment": False
+                "is_facilitator_comment": False
             }
         }
     )
@@ -25,7 +25,7 @@ class Comment(BaseModel):
     commented_by: str = Field(description="Name/ID of the commenter")
     content: str = Field(min_length=1, description="Comment content")
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    is_admin_comment: bool = Field(default=False, description="Whether this is an admin comment")
+    is_facilitator_comment: bool = Field(default=False, description="Whether this is a facilitator comment")
 
 class Task(BaseModel):
     model_config = ConfigDict(
@@ -47,7 +47,7 @@ class Task(BaseModel):
                     {
                         "commented_by": "John Doe",
                         "content": "Initial research completed for Singapore market",
-                        "is_admin_comment": False
+                        "is_facilitator_comment": False
                     }
                 ]
             }
@@ -61,6 +61,8 @@ class Task(BaseModel):
     task: str = Field(min_length=1, description="Task description")
     sub_tasks: Optional[Union[Dict[str, str], List]] = Field(default=None, description="Optional subtasks")
     comments: Union[List[Comment], Dict, List] = Field(default_factory=list, description="List of comments")
+    completed: Optional[bool] = Field(default=False, description="Whether the task/milestone is completed")
+    status: Optional[str] = Field(default="pending", description="Task/milestone status (pending, completed, done, etc.)")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

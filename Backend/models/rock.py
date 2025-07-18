@@ -28,6 +28,7 @@ class Rock(BaseModel):
     quarter_id: UUID = Field(description="Reference to parent quarter")
     assigned_to_id: Optional[UUID] = Field(default=None, description="ID of the assigned user (None if unassigned)")
     assigned_to_name: str = Field(default="", description="Name of the assigned user")
+    status: str = Field(default="pending", description="Status of the rock (pending, in_progress, completed)")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

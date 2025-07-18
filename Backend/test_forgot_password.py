@@ -18,7 +18,7 @@ try:
     print("  - POST /auth/forgot-password")
     print("  - POST /auth/reset-password")
     print("  - POST /auth/login")
-    print("  - POST /auth/register-admin")
+    print("  - POST /auth/register-facilitator")
 except ImportError as e:
     print(f"❌ Import error: {e}")
 except Exception as e:
@@ -30,7 +30,7 @@ async def test_forgot_password_endpoint():
     print("=" * 40)
     
     base_url = "http://localhost:8000"
-    test_email = "admin@test.com"
+    test_email = "facilitator@test.com"
     
     try:
         async with aiohttp.ClientSession() as session:

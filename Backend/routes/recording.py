@@ -13,7 +13,7 @@ import logging
 from datetime import datetime
 
 from models.user import User
-from service.auth_service import admin_required
+from service.auth_service import facilitator_required
 from service.script_pipeline_service import PipelineService
 from utils.id_generator import generate_random_id, generate_session_id, generate_chunk_id
 from service.meeting_json_service import save_raw_context_json
@@ -40,7 +40,7 @@ async def start_recording_session(
     quarterWeeks: Optional[str] = Form(None),
     meetingTitle: Optional[str] = Form(None),
     meetingDescription: Optional[str] = Form(None),
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ):
     """
     Start a new recording session and return session ID
@@ -55,7 +55,7 @@ async def start_recording_session(
         "quarterWeeks": quarterWeeks,
         "meetingTitle": meetingTitle,
         "meetingDescription": meetingDescription,
-        "admin_id": str(current_user.employee_id),
+        "facilitator_id": str(current_user.employee_id),
         "chunks": [],
         "current_transcript": "",
         "transcript_id": None,
@@ -77,7 +77,7 @@ async def process_audio_chunk(
     session_id: str = Form(...),
     is_pause_chunk: bool = Form(...),  # True if this chunk is sent on pause
     file: UploadFile = File(...),
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ):
     """
     Process an audio chunk from recording session
@@ -156,7 +156,7 @@ async def process_audio_chunk(
     # Process transcription in background
     async def process_transcription_async():
         try:
-            pipeline = PipelineService(admin_id=session["admin_id"])
+            pipeline = PipelineService(facilitator_id=session["facilitator_id"])
             
             # Transcribe only (step 1 of pipeline)
             transcription = await pipeline.transcribe_audio(file_location)
@@ -222,7 +222,7 @@ async def process_audio_chunk(
 async def end_recording_session(
     session_id: str = Form(...),
     is_paused_flag: bool = Form(...),  # Flag indicating if recording was paused when ended
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ):
     """
     End recording session
@@ -340,7 +340,7 @@ async def end_recording_session(
 
 @router.get("/sessions")
 async def get_all_sessions(
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ):
     """
     Get all active and completed sessions for the current user
@@ -350,9 +350,9 @@ async def get_all_sessions(
         "completed": []
     }
     
-    # Filter sessions by admin_id
+    # Filter sessions by facilitator_id
     for session_id, session in active_recording_sessions.items():
-        if session["admin_id"] == str(current_user.employee_id):
+        if session["facilitator_id"] == str(current_user.employee_id):
             user_sessions["active"].append({
                 "session_id": session_id,
                 "transcript_id": session["transcript_id"],
@@ -365,7 +365,7 @@ async def get_all_sessions(
             })
     
     for session_id, session in completed_sessions.items():
-        if session["admin_id"] == str(current_user.employee_id):
+        if session["facilitator_id"] == str(current_user.employee_id):
             user_sessions["completed"].append({
                 "session_id": session_id,
                 "transcript_id": session["transcript_id"],
@@ -384,7 +384,7 @@ async def submit_selected_sessions(
     session_ids: str = Form(...),  # Comma-separated session IDs
     quarter_id: str = Form(...),
     quarterWeeks: str = Form("12"),
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ):
     """
     Submit selected recording sessions to the main pipeline
@@ -413,7 +413,7 @@ async def submit_selected_sessions(
             if not session:
                 raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
             
-            if session["admin_id"] != str(current_user.employee_id):
+            if session["facilitator_id"] != str(current_user.employee_id):
                 raise HTTPException(status_code=403, detail=f"Access denied for session {session_id}")
             
             # Check if session has meaningful transcript content
@@ -529,7 +529,7 @@ async def submit_selected_sessions(
                         num_weeks=num_weeks,
                         quarter_id=quarter_id,
                         participants=participant_info,
-                        admin_id=str(current_user.employee_id)
+                        facilitator_id=str(current_user.employee_id)
                     )
                     
                     if "error" in result:
@@ -579,7 +579,7 @@ async def submit_selected_sessions(
 @router.get("/session-status/{session_id}")
 async def get_recording_session_status(
     session_id: str,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ):
     """
     Get status of a specific recording session with chunk processing status
@@ -594,7 +594,7 @@ async def get_recording_session_status(
     if not session:
         raise HTTPException(status_code=404, detail="Recording session not found")
     
-    if session["admin_id"] != str(current_user.employee_id):
+    if session["facilitator_id"] != str(current_user.employee_id):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Calculate processing statistics
@@ -635,7 +635,7 @@ async def get_recording_session_status(
 @router.delete("/cancel-session/{session_id}")
 async def cancel_recording_session(
     session_id: str,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ):
     """
     Cancel an active recording session
@@ -655,7 +655,7 @@ async def cancel_recording_session(
             "message": f"Recording session {session_id} not found or already cancelled"
         }
     
-    if session["admin_id"] != str(current_user.employee_id):
+    if session["facilitator_id"] != str(current_user.employee_id):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Clean up any temporary files

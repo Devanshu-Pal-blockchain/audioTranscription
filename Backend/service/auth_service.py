@@ -93,11 +93,11 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
     """Get current active user"""
     return current_user
 
-async def admin_required(current_user: User = Depends(get_current_user)) -> User:
-    """Verify user has admin role"""
-    if current_user.employee_role != "admin":
+async def facilitator_required(current_user: User = Depends(get_current_user)) -> User:
+    """Verify user has facilitator role"""
+    if current_user.employee_role != "facilitator":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required"
+            detail="Facilitator privileges required"
         )
     return current_user

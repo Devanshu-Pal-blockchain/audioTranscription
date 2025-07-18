@@ -15,18 +15,18 @@ class ResetPasswordRequest(BaseModel):
     email: str
     new_password: str
 
-@router.post("/register-admin", response_model=User)
-async def register_admin(user: User) -> User:
-    """Register an admin user."""
-    # Force role to be admin
-    user.employee_role = "admin"
+@router.post("/register-facilitator", response_model=User)
+async def register_facilitator(user: User) -> User:
+    """Register a facilitator user."""
+    # Force role to be facilitator
+    user.employee_role = "facilitator"
     
-    # Create the admin user
+    # Create the facilitator user
     created_user = await UserService.create_user(user)
     if not created_user:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create admin user"
+            detail="Failed to create facilitator user"
         )
     return created_user
 

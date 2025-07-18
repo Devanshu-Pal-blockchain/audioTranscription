@@ -16,7 +16,7 @@ class User(BaseModel):
     employee_name: str
     employee_email: EmailStr
     employee_password: str
-    employee_role: Literal["admin", "employee"] = "employee"
+    employee_role: Literal["facilitator", "employee"] = "employee"
     employee_responsibilities: Optional[str] = None
     employee_code: Optional[str] = None
     employee_designation: Optional[str] = None

@@ -113,8 +113,20 @@ class TodoService(BaseService):
 
     @staticmethod
     async def update_todo(todo_id: UUID, update_data: Dict) -> Optional[Todo]:
-        update_data["updated_at"] = datetime.utcnow()
-        encrypted = encrypt_dict(update_data.copy(), TodoService.EXCLUDE_FIELDS)
+        # First, get the existing todo to preserve all data
+        existing_todo = await TodoService.get_todo(todo_id)
+        if not existing_todo:
+            return None
+        
+        # Convert existing todo to dict and merge with update data
+        existing_data = existing_todo.model_dump()
+        
+        # Merge update data
+        existing_data.update(update_data)
+        existing_data["updated_at"] = datetime.utcnow()
+        
+        # Re-encrypt the complete data (encrypt_dict now handles date serialization)
+        encrypted = encrypt_dict(existing_data.copy(), TodoService.EXCLUDE_FIELDS)
         result = await TodoService.todos.update_one(
             {"todo_id": str(todo_id)},
             {"$set": encrypted}

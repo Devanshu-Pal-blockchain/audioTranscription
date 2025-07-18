@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from models.issue import Issue
 from service.issue_service import IssueService
 from service.quarter_service import QuarterService
-from service.auth_service import get_current_user, admin_required
+from service.auth_service import get_current_user, facilitator_required
 from models.user import User
 from datetime import datetime
 
@@ -70,7 +70,7 @@ async def get_issues_by_user(
 ) -> List[Issue]:
     """Get all issues raised by a specific user"""
     # Check if user can access these issues
-    if (current_user.employee_role != "admin" and 
+    if (current_user.employee_role != "facilitator" and 
         str(user_id) != str(current_user.employee_id)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -127,8 +127,8 @@ async def update_issue(
             detail="Issue not found"
         )
     
-    # Check permissions - only admin or issue raiser can update
-    if (current_user.employee_role != "admin" and 
+    # Check permissions - only facilitator or issue raiser can update
+    if (current_user.employee_role != "facilitator" and 
         existing_issue.raised_by_id and 
         str(existing_issue.raised_by_id) != str(current_user.employee_id)):
         raise HTTPException(
@@ -148,9 +148,9 @@ async def update_issue(
 @router.delete("/issues/{issue_id}")
 async def delete_issue(
     issue_id: UUID,
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(facilitator_required)
 ) -> Dict[str, str]:
-    """Delete an issue (admin only)"""
+    """Delete an issue (facilitator only)"""
     success = await IssueService.delete_issue(issue_id)
     if not success:
         raise HTTPException(
@@ -166,10 +166,81 @@ async def get_issue_statistics(
     current_user: User = Depends(get_current_user)
 ) -> Dict:
     """Get statistics about issues"""
-    if current_user.employee_role != "admin":
+    if current_user.employee_role != "facilitator":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can view issue statistics"
+            detail="Only facilitators can view issue statistics"
         )
     
     return await IssueService.get_issue_statistics(quarter_id)
+
+# Simple status update endpoint for issues
+
+@router.put("/issues/{issue_id}/status")
+async def update_issue_status(
+    issue_id: UUID,
+    status_data: dict,
+    current_user: User = Depends(get_current_user)
+):
+    """Update issue status (employees can update issues assigned to them)"""
+    print(f"🔄 PUT /issues/{issue_id}/status called with data: {status_data}")
+    
+    # Get the issue to verify it exists
+    issue = await IssueService.get_issue(issue_id)
+    if not issue:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue not found"
+        )
+    
+    # Verify user has permission (facilitator or user who raised the issue)
+    # For issues, check if user raised the issue (raised_by_id or raised_by name matches)
+    can_update = False
+    
+    # TEMPORARY: Allow facilitators for testing purposes
+    # TODO: Remove this when testing is complete
+    if current_user.employee_role == "facilitator":
+        print("🧪 TESTING MODE: Allowing facilitator to update issue status")
+        can_update = True
+    elif current_user.employee_role == "employee":
+        # Check if issue was raised by this employee
+        issue_dict = issue.model_dump()
+        raised_by_id = issue_dict.get('raised_by_id')
+        raised_by_name = issue_dict.get('raised_by', '').lower()
+        current_user_name = current_user.employee_name.lower()
+        
+        if (raised_by_id and str(raised_by_id) == str(current_user.employee_id)) or \
+           (raised_by_name and raised_by_name == current_user_name):
+            can_update = True
+    
+    if not can_update:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Can only update issues that you raised"
+        )
+    
+    # Validate status
+    new_status = status_data.get("status", "open")
+    if new_status not in ["open", "resolved", "pending"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid status. Must be one of: open, resolved, pending"
+        )
+    
+    print(f"🔄 Updating issue status: {new_status}")
+    
+    # Update the status
+    update_data = {
+        "status": new_status,
+        "updated_at": datetime.utcnow()
+    }
+    
+    updated_issue = await IssueService.update_issue(issue_id, update_data)
+    if not updated_issue:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update issue status"
+        )
+    
+    print(f"✅ Issue status updated successfully: {updated_issue.model_dump()}")
+    return updated_issue
