@@ -15,6 +15,60 @@ from pydantic import BaseModel, Field
 
 router = APIRouter()
 
+@router.get("/quarters/user", response_model=List[Dict])
+async def get_user_quarters(
+    current_user: User = Depends(get_current_user)
+) -> List[Dict]:
+    """Get all quarters where the current user is a participant"""
+    quarters = await QuarterService.get_quarters_by_participant(current_user.employee_id)
+    if not quarters:
+        return []
+    
+    # Return simplified quarter data with just id and name info
+    return [
+        {
+            "quarter_id": str(quarter.id),
+            "quarter_name": quarter.quarter,
+            "year": quarter.year,
+            "title": quarter.title,
+            "full_name": f"{quarter.quarter} {quarter.year} - {quarter.title}"
+        }
+        for quarter in quarters
+    ]
+
+@router.get("/quarters/{quarter_id}/data", response_model=Dict)
+async def get_quarter_data(
+    quarter_id: UUID,
+    current_user: User = Depends(get_current_user)
+) -> Dict:
+    """Get comprehensive data for a specific quarter (rocks, todos, issues, milestones)"""
+    # Verify user has access to this quarter
+    quarter = await QuarterService.get_quarter(quarter_id)
+    if not quarter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quarter not found"
+        )
+    
+    # Check if user is participant in this quarter
+    if current_user.employee_id not in quarter.participants:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this quarter"
+        )
+    
+    # Fetch all related data for this quarter
+    rocks = await RockService.get_rocks_by_quarter(quarter_id)
+    todos = await TodoService.get_todos_by_quarter(quarter_id)
+    issues = await IssueService.get_issues_by_quarter(quarter_id)
+    
+    return {
+        "quarter": quarter.model_dump(),
+        "rocks": [rock.model_dump() for rock in rocks],
+        "todos": [todo.model_dump() for todo in todos],
+        "issues": [issue.model_dump() for issue in issues]
+    }
+
 # Field update models
 class WeeksUpdate(BaseModel):
     weeks: int = Field(gt=0, description="Number of weeks in quarter")

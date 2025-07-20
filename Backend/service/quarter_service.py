@@ -83,6 +83,28 @@ class QuarterService:
         return quarter
 
     @staticmethod
+    async def get_quarters_by_participant(user_id: UUID) -> List[Quarter]:
+        """Get all quarters where the user is a participant"""
+        # Query for quarters where user_id is in participants array
+        filter_dict = {
+            "participants": {"$in": [user_id, str(user_id)]}
+        }
+        
+        docs = await QuarterService.collection.find(filter_dict).to_list(None)
+        quarters = []
+        for doc in docs:
+            try:
+                data = QuarterService.safe_decrypt_dict(doc)
+                quarters.append(Quarter(**data))
+            except Exception as e:
+                print(f"Error processing quarter document: {e}")
+                continue
+        
+        # Sort quarters by year and quarter name for consistent ordering
+        quarters.sort(key=lambda q: (q.year, q.quarter))
+        return quarters
+
+    @staticmethod
     async def get_quarter(quarter_id: UUID) -> Optional[Quarter]:
         doc = await QuarterService.collection.find_one({"id": quarter_id})
         if not doc:

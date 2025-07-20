@@ -41,22 +41,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Token:
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Fetch all assigned rocks and their quarter ids
-    from service.rock_service import RockService
-    assigned_rocks = []
-    if user.assigned_rocks:
-        rocks = await RockService.get_rocks_by_user(user.employee_id)
-        for rock in rocks:
-            assigned_rocks.append({
-                "rock_id": str(rock.rock_id),
-                "quarter_id": str(rock.quarter_id)
-            })
-    # Create access token with user information and assigned rocks
+    # Create access token with minimal user information only
     token_data = {
         "sub": str(user.employee_id),
         "role": user.employee_role,
-        "email": user.employee_email,
-        "assigned_rocks": assigned_rocks
+        "name": user.employee_name
     }
     access_token = await create_access_token(data=token_data)
 
