@@ -194,7 +194,7 @@ class QuarterService:
 
     @staticmethod
     async def update_quarter_field(quarter_id: UUID, field: str, value) -> Optional[Quarter]:
-        if field not in ["weeks", "year", "title", "description", "status"]:
+        if field not in ["weeks", "year", "title", "description", "status", "session_summary"]:
             return None
         result = await QuarterService.collection.find_one_and_update(
             {"id": quarter_id},
@@ -218,6 +218,11 @@ class QuarterService:
                 return_document=True
             )
         return Quarter(**QuarterService.safe_decrypt_dict(result)) if result else None
+
+    @staticmethod
+    async def update_session_summary(quarter_id: UUID, session_summary: str) -> Optional[Quarter]:
+        """Update the session summary for a quarter"""
+        return await QuarterService.update_quarter_field(quarter_id, "session_summary", session_summary)
 
     @staticmethod
     async def get_quarters_by_status(status: int) -> List[Quarter]:

@@ -417,11 +417,16 @@ class DataParserService:
             logger.error(f"Error parsing pipeline response: {e}")
             return [], [], [], [], []
     
-    async def insert_to_db(self, rocks_array, milestones_array, todos_array, issues_array, runtime_solutions_array):
-        """Insert parsed data into database collections"""
+    async def insert_to_db(self, rocks_array, milestones_array, todos_array, issues_array, runtime_solutions_array, session_summary=None, quarter_id=None):
+        """Insert parsed data into database collections and update quarter with session summary"""
         try:
             # Define fields to exclude from encryption
             exclude_fields = ["id", "rock_id", "task_id", "todo_id", "issue_id", "assigned_to_id", "assigned_to_name", "raised_by_id", "raised_by", "created_at", "updated_at", "quarter_id", "status"]
+            
+            # Save session summary to quarter if provided
+            if session_summary and quarter_id:
+                await self._save_session_summary_to_quarter(quarter_id, session_summary)
+            
             # Insert rocks
             if rocks_array:
                 encrypted_rocks = [encrypt_dict(dict(rock), exclude_fields) for rock in rocks_array]
@@ -459,8 +464,48 @@ class DataParserService:
         except Exception as e:
             logger.error(f"Error inserting data into database: {e}")
             raise
+
+    async def _save_session_summary_to_quarter(self, quarter_id: str, session_summary: dict):
+        """Extract and save session summary to quarter"""
+        try:
+            from service.quarter_service import QuarterService
+            from uuid import UUID
+            
+            # Extract session summary text from the structured summary
+            summary_text = ""
+            if isinstance(session_summary, dict):
+                # Create a comprehensive summary text from all sections
+                sections = []
+                if "meeting_overview" in session_summary:
+                    sections.append(f"Meeting Overview: {session_summary['meeting_overview']}")
+                if "strategic_themes" in session_summary:
+                    sections.append(f"Strategic Themes: {session_summary['strategic_themes']}")
+                if "participant_roles" in session_summary:
+                    sections.append(f"Participant Roles: {session_summary['participant_roles']}")
+                if "issues_landscape" in session_summary:
+                    sections.append(f"Issues Landscape: {session_summary['issues_landscape']}")
+                if "task_allocation" in session_summary:
+                    sections.append(f"Task Allocation: {session_summary['task_allocation']}")
+                if "strategic_direction" in session_summary:
+                    sections.append(f"Strategic Direction: {session_summary['strategic_direction']}")
+                if "implementation_timeline" in session_summary:
+                    sections.append(f"Implementation Timeline: {session_summary['implementation_timeline']}")
+                
+                summary_text = " ".join(sections)
+            elif isinstance(session_summary, str):
+                summary_text = session_summary
+            
+            if summary_text and quarter_id:
+                quarter_uuid = UUID(quarter_id)
+                updated_quarter = await QuarterService.update_session_summary(quarter_uuid, summary_text)
+                if updated_quarter:
+                    logger.info(f"Successfully updated session summary for quarter {quarter_id}")
+                else:
+                    logger.warning(f"Failed to update session summary for quarter {quarter_id}")
+        except Exception as e:
+            logger.error(f"Error saving session summary to quarter {quarter_id}: {e}")
     
-    async def save_parsed_data(self, rocks_array: List[Dict[str, Any]], milestones_array: List[Dict[str, Any]], todos_array: List[Dict[str, Any]], issues_array: List[Dict[str, Any]], runtime_solutions_array: List[Dict[str, Any]], file_prefix: Optional[str] = None) -> Tuple[str, str, str, str, str]:
+    async def save_parsed_data(self, rocks_array: List[Dict[str, Any]], milestones_array: List[Dict[str, Any]], todos_array: List[Dict[str, Any]], issues_array: List[Dict[str, Any]], runtime_solutions_array: List[Dict[str, Any]], file_prefix: Optional[str] = None, session_summary=None, quarter_id=None) -> Tuple[str, str, str, str, str]:
         """
         Save the parsed arrays to separate JSON files and insert them into the database (rocks/tasks only for now)
         Returns:
@@ -486,7 +531,7 @@ class DataParserService:
                 json.dump(runtime_solutions_array, f, indent=2, ensure_ascii=False)
             # Insert into database
             try:
-                await self.insert_to_db(rocks_array, milestones_array, todos_array, issues_array, runtime_solutions_array)
+                await self.insert_to_db(rocks_array, milestones_array, todos_array, issues_array, runtime_solutions_array, session_summary, quarter_id)
                 logger.info(f"Successfully inserted all data into database")
             except Exception as db_exc:
                 logger.error(f"Error inserting data into database: {db_exc}")
@@ -498,7 +543,8 @@ class DataParserService:
 
     async def parse_and_save(self, pipeline_response: Dict[str, Any], file_prefix: Optional[str] = None, quarter_id: str = "", participants: Optional[List] = None) -> Tuple[str, str, str, str, str]:
         rocks_array, milestones_array, todos_array, issues_array, runtime_solutions_array = self.parse_pipeline_response(pipeline_response, quarter_id, participants)
-        return await self.save_parsed_data(rocks_array, milestones_array, todos_array, issues_array, runtime_solutions_array, file_prefix)
+        session_summary = pipeline_response.get("session_summary")
+        return await self.save_parsed_data(rocks_array, milestones_array, todos_array, issues_array, runtime_solutions_array, file_prefix, session_summary, quarter_id)
 
 # Convenience function for easy usage
 async def parse_pipeline_response_to_files(pipeline_response: Dict[str, Any], file_prefix: Optional[str] = None, quarter_id: str = "", participants: Optional[List] = None) -> Tuple[str, str, str, str, str]:

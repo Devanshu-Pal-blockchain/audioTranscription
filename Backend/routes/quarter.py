@@ -85,6 +85,9 @@ class DescriptionUpdate(BaseModel):
 class StatusUpdate(BaseModel):
     status: int = Field(ge=0, le=1, description="Quarter status (0 = draft, 1 = saved)")
 
+class SessionSummaryUpdate(BaseModel):
+    session_summary: str = Field(description="Quarter session summary")
+
 @router.post("/quarters", response_model=Quarter)
 async def create_quarter(
     quarter: Quarter,
@@ -213,6 +216,21 @@ async def update_quarter_status(
 ) -> Quarter:
     """Update quarter status (facilitator only)"""
     quarter = await QuarterService.update_quarter_field(quarter_id, "status", update.status)
+    if not quarter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quarter not found"
+        )
+    return quarter
+
+@router.put("/quarters/{quarter_id}/session-summary", response_model=Quarter)
+async def update_quarter_session_summary(
+    quarter_id: UUID,
+    update: SessionSummaryUpdate,
+    current_user: User = Depends(facilitator_required)
+) -> Quarter:
+    """Update quarter session summary (facilitator only)"""
+    quarter = await QuarterService.update_session_summary(quarter_id, update.session_summary)
     if not quarter:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
