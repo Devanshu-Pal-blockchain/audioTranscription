@@ -4,6 +4,7 @@ from .task import Task, Comment
 from .user import User
 from .todo import Todo
 from .issue import Issue
+from .company import Company
 
 __all__ = [
     "Quarter",
@@ -12,5 +13,6 @@ __all__ = [
     "Comment",
     "User",
     "Todo",
-    "Issue"
+    "Issue",
+    "Company"
 ] 

@@ -13,9 +13,15 @@ router = APIRouter()
 @router.post("/users", response_model=User)
 async def create_user(
     user: User,
-    current_user: User = Depends(facilitator_required)
+    current_user: User = Depends(get_current_user)
 ) -> User:
-    """Create a new user (facilitator only)"""
+    """Create a new user (admin or facilitator only)"""
+    if current_user.employee_role not in ["admin", "facilitator"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or Facilitator access required"
+        )
+    
     created_user = await UserService.create_user(user)
     if not created_user:
         raise HTTPException(
@@ -37,8 +43,9 @@ async def get_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """Get a user by ID"""
-    # Regular users can only view their own profile
-    if current_user.employee_role != "facilitator" and current_user.employee_id != user_id:
+    # Admin can view all users, regular users can only view their own profile
+    if (current_user.employee_role not in ["admin", "facilitator"] and 
+        current_user.employee_id != user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only view your own profile"
@@ -54,9 +61,14 @@ async def get_user(
 @router.get("/users", response_model=List[User])
 async def list_users(
     role: Optional[str] = None,
-    current_user: User = Depends(facilitator_required)
+    current_user: User = Depends(get_current_user)
 ) -> List[User]:
-    """List all users, optionally filtered by role (facilitator only)"""
+    """List all users, optionally filtered by role (admin or facilitator only)"""
+    if current_user.employee_role not in ["admin", "facilitator"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or Facilitator access required"
+        )
     return await UserService.get_users(role)
 
 @router.put("/users/{user_id}", response_model=User)
@@ -116,9 +128,15 @@ async def update_password(
 @router.delete("/users/{user_id}")
 async def delete_user(
     user_id: UUID,
-    current_user: User = Depends(facilitator_required)
+    current_user: User = Depends(get_current_user)
 ) -> dict:
-    """Delete a user (facilitator only)"""
+    """Delete a user (admin or facilitator only)"""
+    if current_user.employee_role not in ["admin", "facilitator"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or Facilitator access required"
+        )
+    
     # Prevent self-deletion
     if current_user.employee_id == user_id:
         raise HTTPException(

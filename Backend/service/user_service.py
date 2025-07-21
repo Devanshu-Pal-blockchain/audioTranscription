@@ -24,6 +24,9 @@ class UserService:
         
         # Convert UUIDs to strings for MongoDB
         user_dict["employee_id"] = str(user_dict["employee_id"])
+        # Handle optional company_id - convert UUID to string
+        if user_dict.get("company_id") is not None:
+            user_dict["company_id"] = str(user_dict["company_id"])
         # Handle optional assigned_rocks
         if user_dict.get("assigned_rocks") is not None:
             user_dict["assigned_rocks"] = [str(rock) for rock in user_dict["assigned_rocks"]]
@@ -48,6 +51,10 @@ class UserService:
         # Convert string IDs to UUIDs
         user_dict["employee_id"] = UUID(user_dict["employee_id"])
         user_dict["assigned_rocks"] = [UUID(rock_id) for rock_id in user_dict.get("assigned_rocks", [])]
+        # Convert company_id if present
+        if user_dict.get("company_id"):
+            if isinstance(user_dict["company_id"], str):
+                user_dict["company_id"] = UUID(user_dict["company_id"])
         return User.model_validate(user_dict)
 
     @staticmethod
@@ -57,7 +64,11 @@ class UserService:
         if user_dict:
             # Convert string UUIDs back to UUID objects
             user_dict["employee_id"] = UUID(user_dict["employee_id"])
-            user_dict["assigned_rocks"] = [UUID(rock) for rock in user_dict["assigned_rocks"]]
+            user_dict["assigned_rocks"] = [UUID(rock) for rock in user_dict.get("assigned_rocks", [])]
+            # Convert company_id if present
+            if user_dict.get("company_id"):
+                if isinstance(user_dict["company_id"], str):
+                    user_dict["company_id"] = UUID(user_dict["company_id"])
             return User.model_validate(user_dict)
         return None
 
@@ -67,7 +78,14 @@ class UserService:
         query = {"employee_role": role} if role else {}
         users = []
         async for user_dict in UserService.collection.find(query):
-            users.append(User(**user_dict))
+            # Convert string IDs to UUIDs
+            user_dict["employee_id"] = UUID(user_dict["employee_id"])
+            user_dict["assigned_rocks"] = [UUID(rock_id) for rock_id in user_dict.get("assigned_rocks", [])]
+            # Convert company_id if present
+            if user_dict.get("company_id"):
+                if isinstance(user_dict["company_id"], str):
+                    user_dict["company_id"] = UUID(user_dict["company_id"])
+            users.append(User.model_validate(user_dict))
         return users
 
     @staticmethod
@@ -212,7 +230,7 @@ class UserService:
             "employee_name": user.employee_name,
             "employee_email": user.employee_email,
             "employee_role": user.employee_role,
-            "assigned_rocks": [str(rock_id) for rock_id in user.assigned_rocks]
+            "assigned_rocks": [str(rock_id) for rock_id in (user.assigned_rocks or [])]
         }
 
     @staticmethod

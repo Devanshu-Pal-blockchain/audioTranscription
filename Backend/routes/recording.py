@@ -675,3 +675,53 @@ async def cancel_recording_session(
     return {
         "message": f"Recording session {session_id} cancelled successfully"
     }
+
+
+@router.put("/rename-session")
+async def rename_recording_session(
+    session_id: str = Form(...),
+    new_name: str = Form(...),
+    current_user: User = Depends(facilitator_required)
+):
+    """
+    Rename a recording session by updating its meetingTitle
+    """
+    # Find session in completed sessions (only completed sessions can be renamed)
+    if session_id in completed_sessions:
+        completed_sessions[session_id]["meetingTitle"] = new_name
+        
+        # Also update the JSON file if it exists
+        try:
+            transcript_path = f"uploaded_audios/temp_transcripts/session_{session_id}.json"
+            if os.path.exists(transcript_path):
+                with open(transcript_path, 'r', encoding='utf-8') as f:
+                    session_data = json.load(f)
+                
+                # Update the meetingTitle in the JSON file
+                if "metadata" in session_data:
+                    session_data["metadata"]["meetingTitle"] = new_name
+                else:
+                    session_data["metadata"] = {"meetingTitle": new_name}
+                
+                # Write back to file
+                with open(transcript_path, 'w', encoding='utf-8') as f:
+                    json.dump(session_data, f, indent=2, ensure_ascii=False)
+                    
+                logger.info(f"Updated session {session_id} name in JSON file to: {new_name}")
+                    
+        except Exception as e:
+            logger.warning(f"Could not update JSON file for session {session_id}: {e}")
+        
+        logger.info(f"Session {session_id} renamed to: {new_name}")
+        return {
+            "message": f"Session {session_id} renamed to '{new_name}' successfully",
+            "session_id": session_id,
+            "new_name": new_name
+        }
+    elif session_id in active_recording_sessions:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot rename active recording session. Please end the session first."
+        )
+    else:
+        raise HTTPException(status_code=404, detail="Recording session not found")
